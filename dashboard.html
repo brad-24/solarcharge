@@ -756,7 +756,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         " (" + relDays(-lastDays) + ")" + (sc.soc !== null && sc.soc !== undefined ? " &#183; now " + sc.soc + "%" + (sc.need_kwh > 0 ? ", about " + Math.round(sc.need_kwh) + " kWh to full" : "") : "");
     }
     var best = sc.forecast.filter(function (d) { return d.best; })[0];
-    if (best) meta.innerHTML += "<br>Best day: <b>" + dayLabel(best.date) + "</b>, " + best.label + ", about " + Math.round(best.solar_kwh) + " kWh of solar forecast";
+    if (best) meta.innerHTML += "<br>Best day: <b>" + dayLabel(best.date) + "</b>, " + best.label + ", about " + Math.round(best.solar_kwh) + " kWh of solar forecast" +
+      (sc.best_late ? "<br><span class='muted'>The car isn't usually home all day before it's due, so this is the first good home day after. A few days late is fine for LFP.</span>" : "");
     else if (sc.forecast_error) meta.innerHTML += "<br><span class='muted'>Solar forecast unavailable right now</span>";
     $("sc-days").innerHTML = sc.forecast.slice(0, 7).map(function (d) {
       var cls = "day7" + (d.home ? "" : " away") + (d.best ? " best" : "") + (d.due ? " dueday" : "");

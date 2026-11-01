@@ -1376,8 +1376,11 @@ class Controller(object):
         limit = due if (due is not None and due >= today.toordinal()) else today.toordinal() + 7
         cands = [x for x in days if x["home"] and x.get("solar_kwh") is not None and
                  datetime.strptime(x["date"], "%Y-%m-%d").date().toordinal() <= limit]
+        late = False
         if not cands:
+            # no home day before it's due: suggest the sunniest home day after instead
             cands = [x for x in days if x["home"] and x.get("solar_kwh") is not None]
+            late = bool(cands) and due is not None
         best = max(cands, key=lambda x: x["solar_kwh"])["date"] if cands else None
         for x in days:
             x["best"] = x["date"] == best
@@ -1393,6 +1396,7 @@ class Controller(object):
             "forecast": days,
             "forecast_error": self.forecast.error if self.forecast else "off",
             "best": best,
+            "best_late": late,
             "today": today.strftime("%Y-%m-%d"),
         }
 
