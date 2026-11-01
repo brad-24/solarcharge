@@ -167,6 +167,7 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .days7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 14px; }
 .day7 { border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; text-align: center; background: var(--surface); position: relative; }
 .day7 .dn { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.day7 .dt { font-size: 11px; color: var(--text-3); }
 .day7 .ic { height: 26px; margin: 4px auto 2px; display: block; }
 .day7 .kw { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .day7 .lb { font-size: 11px; color: var(--text-3); min-height: 15px; }
@@ -761,7 +762,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       var cls = "day7" + (d.home ? "" : " away") + (d.best ? " best" : "") + (d.due ? " dueday" : "");
       var tag = d.best ? "<span class='tag'>Best</span>" : d.due ? "<span class='tag'>Due</span>" : "";
       return "<div class='" + cls + "' title='" + (d.home ? "Car usually home all day" : "Car usually out during the day") + "'>" + tag +
-        "<div class='dn'>" + dayLabel(d.date, true) + "</div>" + (ICON[d.label] || ICON.unknown) +
+        "<div class='dn'>" + dayLabel(d.date, true) + "</div>" +
+        "<div class='dt'>" + new Date(d.date + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }) + "</div>" + (ICON[d.label] || ICON.unknown) +
         "<div class='kw'>" + (d.solar_kwh !== null ? Math.round(d.solar_kwh) + " kWh" : "n/a") + "</div>" +
         "<div class='lb'>" + d.label + "</div></div>";
     }).join("");
