@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23121722%22/%3E%3Cg stroke=%22%23ffc53d%22 stroke-width=%224.5%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M32 6v6M32 52v6M6 32h6M52 32h6M13.6 13.6l4.2 4.2M46.2 46.2l4.2 4.2M13.6 50.4l4.2-4.2M46.2 17.8l4.2-4.2%22/%3E%3C/g%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2215%22 fill=%22%23ffc53d%22/%3E%3Cpath d=%22M35 19 L24 34 H31 L28 45 L40 29 H33 Z%22 fill=%22%23121722%22/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="theme-color" content="#121722">
+<meta name="apple-mobile-web-app-title" content="SolarCharge">
+<title>SolarCharge Sessions</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7c7a74; --grid: #e6e4de;
+  --s-solar: #eb6834; --s-grid: #2a78d6; --good: #0a8a0a; --accent: #2a78d6; --accent-ink: #fff;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
+    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
+    --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --accent: #3987e5; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
+  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
+  --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --accent: #3987e5; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+h1 img { width: 28px; height: 28px; border-radius: 7px; }
+nav { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
+nav a { font-size: 14px; color: var(--text-2); text-decoration: none; padding: 4px 12px; border-radius: 7px; }
+nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
+.theme { margin-left: auto; background: none; border: 1px solid var(--border); color: var(--text-2); border-radius: 8px; font: inherit; font-size: 13px; padding: 3px 9px; cursor: pointer; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.card h2 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0; text-transform: uppercase; letter-spacing: .05em; }
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.seg { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 9px; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--text-2); padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
+.btn { margin-left: auto; font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.btn:hover { border-color: var(--text-3); }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tile .label { font-size: 12px; color: var(--text-2); }
+.tile .value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.tile .value small { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 2px; }
+.tile .sub { font-size: 12px; color: var(--text-3); }
+.charthead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.legendrow { display: flex; gap: 14px; font-size: 13px; color: var(--text-2); }
+.legendrow span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.chart { position: relative; height: 240px; }
+.chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .axis text { fill: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .gridline { stroke: var(--grid); stroke-width: 1; }
+.chart .baseline { stroke: var(--text-3); stroke-width: 1; }
+.chart .hit { fill: transparent; cursor: default; }
+.chart .hit:hover + .hl, .chart .hl.on { opacity: 1; }
+.chart .hl { fill: var(--text-3); opacity: 0; pointer-events: none; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 160px; display: none; z-index: 5; }
+.tip .t { color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 7px; }
+.tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-3); font-size: 14px; text-align: center; padding: 0 20px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 8px 6px; border-top: 1px solid var(--border); white-space: nowrap; }
+th { font-weight: 600; color: var(--text-2); font-size: 12px; border-top: 0; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+tr.month td { border-top: 0; padding: 18px 6px 6px; text-align: left; white-space: normal; }
+tr.month:first-child td { padding-top: 4px; }
+tr.month .mname { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--text); }
+tr.month .msum { font-size: 13px; color: var(--text-3); margin-left: 10px; }
+tr.live td { color: var(--text); }
+.pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
+.share { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.share .bar { width: 46px; height: 6px; border-radius: 3px; background: var(--s-grid); overflow: hidden; display: inline-block; }
+.share .bar i { display: block; height: 100%; background: var(--s-solar); }
+.muted { color: var(--text-3); }
+.tablewrap { overflow-x: auto; }
+@media (max-width: 700px) { .hide-sm, .share .bar { display: none; } th, td { padding: 8px 4px; } }
+footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
+    <nav><a href="/">Dashboard</a><a href="/sessions" class="on">Sessions</a></nav>
+    <button class="theme" id="theme" type="button">Theme</button>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" id="period">
+      <button type="button" data-p="month" class="on">This month</button>
+      <button type="button" data-p="last">Last month</button>
+      <button type="button" data-p="year">This year</button>
+      <button type="button" data-p="all">All time</button>
+    </div>
+    <button class="btn" id="csv" type="button">Download CSV</button>
+  </div>
+
+  <section class="tiles">
+    <div class="card tile"><div class="label">Sessions</div><div class="value" id="t-n">&nbsp;</div><div class="sub" id="t-nsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Charged</div><div class="value" id="t-kwh">&nbsp;</div><div class="sub" id="t-kwhsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">From solar</div><div class="value" id="t-share">&nbsp;</div><div class="sub" id="t-solar">&nbsp;</div></div>
+    <div class="card tile"><div class="label">From grid</div><div class="value" id="t-grid">&nbsp;</div><div class="sub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">&nbsp;</div><div class="sub" id="t-costsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Saved by solar</div><div class="value" id="t-saved">&nbsp;</div><div class="sub">vs charging from the grid</div></div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="charthead">
+      <h2 id="charttitle">Energy by day</h2>
+      <div class="legendrow">
+        <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
+        <span><span class="swatch" style="background:var(--s-grid)"></span>Grid</span>
+      </div>
+    </div>
+    <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="charthead"><h2>Sessions</h2></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th class="hide-sm">Plugged in</th><th class="hide-sm">Charging</th>
+          <th>kWh</th><th>Solar</th><th class="hide-sm">Grid kWh</th><th class="hide-sm">Peak kW</th>
+          <th>Cost</th><th class="hide-sm">Saved</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer id="footer">A session runs from plugging in to unplugging. Costs use the tariff in config.ini at the time of each session.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, period = "month";
+
+  try { var t = localStorage.getItem("sc-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  $("theme").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("sc-theme", next); } catch (e) {}
+  });
+
+  function d(ts) { return new Date(ts * 1000); }
+  function hm(ts) { var x = d(ts); return ("0" + x.getHours()).slice(-2) + ":" + ("0" + x.getMinutes()).slice(-2); }
+  function dur(min) { if (!min) return "0:00"; return Math.floor(min / 60) + ":" + ("0" + (min % 60)).slice(-2); }
+  function money(v) { return "$" + (v || 0).toFixed(2); }
+  function kwh(v) { return (v || 0).toFixed(1); }
+  function monthKey(ts) { var x = d(ts); return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2); }
+  function dayKey(ts) { var x = d(ts); return monthKey(ts) + "-" + ("0" + x.getDate()).slice(-2); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function range(p) {
+    var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    if (p === "month") return [new Date(y, m, 1), new Date(y, m + 1, 1)];
+    if (p === "last") return [new Date(y, m - 1, 1), new Date(y, m, 1)];
+    if (p === "year") return [new Date(y, 0, 1), new Date(y + 1, 0, 1)];
+    return [new Date(2000, 0, 1), new Date(2100, 0, 1)];
+  }
+
+  function inPeriod() {
+    var r = range(period), a = r[0].getTime() / 1000, b = r[1].getTime() / 1000;
+    var list = data.sessions.filter(function (s) { return s.start >= a && s.start < b; });
+    if (data.current && data.current.start >= a && data.current.start < b) {
+      var c = Object.assign({}, data.current); c.live = true; list.push(c);
+    }
+    return list.sort(function (x, y) { return y.start - x.start; });
+  }
+
+  function sum(list, k) { return list.reduce(function (t, s) { return t + (s[k] || 0); }, 0); }
+
+  function render() {
+    var all = inPeriod();
+    var live = all.filter(function (s) { return s.live; });
+    var list = all.filter(function (s) { return !s.live; });
+    var n = list.length, total = sum(list, "kwh"), solar = sum(list, "solar_kwh"), grid = sum(list, "grid_kwh");
+    var cost = sum(list, "cost"), saved = sum(list, "saved"), chg = sum(list, "charge_min");
+    $("t-n").textContent = n;
+    $("t-nsub").textContent = n ? dur(chg) + " charging" : " ";
+    $("t-kwh").innerHTML = kwh(total) + "<small>kWh</small>";
+    $("t-kwhsub").textContent = n ? kwh(total / n) + " kWh per session" : " ";
+    $("t-share").innerHTML = total > 0 ? Math.round(100 * solar / total) + "<small>%</small>" : "<span class='muted'>n/a</span>";
+    $("t-solar").textContent = kwh(solar) + " kWh of solar";
+    $("t-grid").innerHTML = kwh(grid) + "<small>kWh</small>";
+    $("t-cost").textContent = money(cost);
+    $("t-costsub").textContent = total > 0 ? Math.round(100 * cost / total) + "c per kWh average" : " ";
+    $("t-saved").textContent = money(saved);
+    renderTable(list, live);
+    renderChart(list);
+  }
+
+  function renderTable(list, live) {
+    var head = (live || []).map(rowHtml).join("");
+    if (!list.length) {
+      $("rows").innerHTML = head + "<tr><td colspan='9' class='muted' style='text-align:center;padding:24px'>No finished sessions in this period yet. A session is recorded when the car is unplugged.</td></tr>";
+      return;
+    }
+    $("rows").innerHTML = head + list.map(rowHtml).join("");
+  }
+
+  function rowHtml(s) {
+        var html = "";
+        var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+        var span = hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
+        html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") +
+          "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
+          "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
+          "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw || 0).toFixed(1) +
+          "</td><td>" + money(s.cost) + "</td><td class='hide-sm'>" + money(s.saved) + "</td></tr>";
+        return html;
+  }
+
+  function renderChart(list) {
+    var box = $("chart"), tip = $("tip");
+    var old = box.querySelector("svg"); if (old) old.remove();
+    var oe = box.querySelector(".empty"); if (oe) oe.remove();
+    var byMonth = period === "year" || period === "all";
+    $("charttitle").textContent = byMonth ? "Energy by month" : "Energy by day";
+    var buckets = [], idx = {};
+    var r = range(period);
+    if (byMonth) {
+      var start = r[0];
+      if (period === "all") {
+        var first = list.length ? d(list[list.length - 1].start) : new Date();
+        start = new Date(first.getFullYear(), first.getMonth(), 1);
+        var nowd = new Date(); r = [start, new Date(nowd.getFullYear(), nowd.getMonth() + 1, 1)];
+      }
+      for (var m = new Date(r[0]); m < r[1]; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+        var k = m.getFullYear() + "-" + ("0" + (m.getMonth() + 1)).slice(-2);
+        idx[k] = buckets.length; buckets.push({ k: k, label: m.toLocaleDateString([], { month: "short" }), full: m.toLocaleDateString([], { month: "long", year: "numeric" }), s: 0, g: 0, n: 0 });
+      }
+    } else {
+      for (var dd = new Date(r[0]); dd < r[1]; dd = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() + 1)) {
+        var k2 = dd.getFullYear() + "-" + ("0" + (dd.getMonth() + 1)).slice(-2) + "-" + ("0" + dd.getDate()).slice(-2);
+        idx[k2] = buckets.length; buckets.push({ k: k2, label: String(dd.getDate()), full: dd.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }), s: 0, g: 0, n: 0 });
+      }
+    }
+    list.forEach(function (s) {
+      var k = byMonth ? monthKey(s.start) : dayKey(s.start), i = idx[k];
+      if (i === undefined) return;
+      buckets[i].s += s.solar_kwh || 0; buckets[i].g += s.grid_kwh || 0; buckets[i].n += 1;
+    });
+    var max = 0; buckets.forEach(function (b) { max = Math.max(max, b.s + b.g); });
+    if (max <= 0) {
+      var e = document.createElement("div"); e.className = "empty";
+      e.textContent = "No charging recorded in this period yet";
+      box.appendChild(e); return;
+    }
+    var nice = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+    var step = nice[nice.length - 1]; for (var i = 0; i < nice.length; i++) if (nice[i] * 4 >= max) { step = nice[i]; break; }
+    var ymax = step * 4;
+    var W = box.clientWidth, H = box.clientHeight, ml = 40, mr = 8, mt = 8, mb = 24, iw = W - ml - mr, ih = H - mt - mb;
+    var slot = iw / buckets.length, bw = Math.max(3, Math.min(34, slot * 0.62));
+    var y = function (v) { return mt + ih - v / ymax * ih; };
+    var html = "<g class='axis'>";
+    for (var g = 0; g <= 4; g++) {
+      var v = step * g, yy = y(v);
+      html += "<line class='" + (g === 0 ? "baseline" : "gridline") + "' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
+      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + v + (g === 4 ? " kWh" : "") + "</text>";
+    }
+    var every = Math.ceil(buckets.length / Math.max(4, Math.floor(iw / 38)));
+    buckets.forEach(function (b, i) {
+      if (i % every === 0) html += "<text x='" + (ml + slot * (i + 0.5)) + "' y='" + (H - 6) + "' text-anchor='middle'>" + b.label + "</text>";
+    });
+    html += "</g>";
+    var rr = Math.min(4, bw / 2);
+    buckets.forEach(function (b, i) {
+      var x = ml + slot * (i + 0.5) - bw / 2, base = y(0);
+      if (b.s + b.g > 0) {
+        var hs = b.s / ymax * ih, hg = b.g / ymax * ih, gap = (hs > 0 && hg > 0) ? 2 : 0;
+        if (hs > 0) {
+          var top = hg > 0;
+          html += barPath(x, base - hs, bw, hs, top ? 0 : rr, "var(--s-solar)");
+        }
+        if (hg > 0) html += barPath(x, base - hs - gap - hg, bw, hg, rr, "var(--s-grid)");
+      }
+      html += "<rect class='hit' data-i='" + i + "' x='" + (ml + slot * i) + "' y='" + mt + "' width='" + slot + "' height='" + ih + "'/>";
+    });
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Charging energy from solar and grid " + (byMonth ? "by month" : "by day"));
+    svg.innerHTML = html;
+    box.insertBefore(svg, tip);
+    svg.addEventListener("mousemove", function (ev) {
+      var t = ev.target; if (!t.classList || !t.classList.contains("hit")) { tip.style.display = "none"; return; }
+      var b = buckets[+t.getAttribute("data-i")];
+      tip.innerHTML = "<div class='t'>" + b.full + "</div>" +
+        "<div class='r'><span class='swatch' style='background:var(--s-solar)'></span>Solar<b>" + kwh(b.s) + " kWh</b></div>" +
+        "<div class='r'><span class='swatch' style='background:var(--s-grid)'></span>Grid<b>" + kwh(b.g) + " kWh</b></div>" +
+        "<div class='r'><span class='swatch'></span>" + b.n + (b.n === 1 ? " session" : " sessions") + "<b>" + kwh(b.s + b.g) + " kWh</b></div>";
+      tip.style.display = "block";
+      var cx = +t.getAttribute("x") + slot / 2, tx = cx + 12;
+      if (tx + tip.offsetWidth > W) tx = cx - tip.offsetWidth - 12;
+      tip.style.left = tx + "px"; tip.style.top = "6px";
+    });
+    svg.addEventListener("mouseleave", function () { tip.style.display = "none"; });
+  }
+
+  function barPath(x, y, w, h, r, fill) {
+    r = Math.min(r, h, w / 2);
+    var d = "M" + x + "," + (y + h) + " L" + x + "," + (y + r) + " Q" + x + "," + y + " " + (x + r) + "," + y +
+            " L" + (x + w - r) + "," + y + " Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + " L" + (x + w) + "," + (y + h) + " Z";
+    return "<path d='" + d + "' style='fill:" + fill + "'/>";
+  }
+
+  $("period").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    period = b.getAttribute("data-p");
+    var all = $("period").querySelectorAll("button");
+    for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
+    if (data) render();
+  });
+
+  $("csv").addEventListener("click", function () {
+    if (!data) return;
+    var cols = ["start", "end", "kwh", "solar_kwh", "grid_kwh", "solar_pct", "charge_min", "plugged_min", "peak_kw", "cost", "saved", "starts", "stops", "commands"];
+    var lines = [["date", "plugged_in", "unplugged"].concat(cols.slice(2)).join(",")];
+    inPeriod().slice().reverse().forEach(function (s) {
+      var row = [dayKey(s.start), hm(s.start), s.live ? "" : hm(s.end)];
+      cols.slice(2).forEach(function (c) { row.push(s[c] === undefined ? "" : s[c]); });
+      lines.push(row.join(","));
+    });
+    var blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "solarcharge-sessions-" + period + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  function load() {
+    fetch("/api/sessions", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (j) { data = j; render(); }).catch(function () {});
+  }
+  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { if (data) renderChart(inPeriod()); }, 150); });
+  load(); setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>

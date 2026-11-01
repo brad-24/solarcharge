@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23121722%22/%3E%3Cg stroke=%22%23ffc53d%22 stroke-width=%224.5%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M32 6v6M32 52v6M6 32h6M52 32h6M13.6 13.6l4.2 4.2M46.2 46.2l4.2 4.2M13.6 50.4l4.2-4.2M46.2 17.8l4.2-4.2%22/%3E%3C/g%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2215%22 fill=%22%23ffc53d%22/%3E%3Cpath d=%22M35 19 L24 34 H31 L28 45 L40 29 H33 Z%22 fill=%22%23121722%22/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="theme-color" content="#121722">
+<meta name="apple-mobile-web-app-title" content="SolarCharge">
+<title>SolarCharge</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3ef;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --border: #e2e0da;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7c7a74;
+  --grid: #e6e4de;
+  --s-house: #2a78d6;
+  --s-solar: #eb6834;
+  --s-car: #1baf7a;
+  --good: #0ca30c;
+  --warn: #b77800;
+  --crit: #d03b3b;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --border: #2e2e2b;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8f8e86;
+    --grid: #2a2a27;
+    --s-house: #3987e5;
+    --s-solar: #d95926;
+    --s-car: #199e70;
+    --good: #2fbf2f;
+    --warn: #fab219;
+    --crit: #e66767;
+    --accent: #3987e5;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --border: #2e2e2b;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --text-3: #8f8e86;
+  --grid: #2a2a27;
+  --s-house: #3987e5;
+  --s-solar: #d95926;
+  --s-car: #199e70;
+  --good: #2fbf2f;
+  --warn: #fab219;
+  --crit: #e66767;
+  --accent: #3987e5;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+h1 img { width: 28px; height: 28px; border-radius: 7px; }
+.nav { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
+.nav a { font-size: 14px; color: var(--text-2); text-decoration: none; padding: 4px 12px; border-radius: 7px; }
+.nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
+.pill {
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-2); background: var(--surface);
+}
+.pill.dry { color: var(--warn); border-color: currentColor; }
+.pill.live { color: var(--good); border-color: currentColor; }
+.pill.sim { color: var(--accent); border-color: currentColor; }
+.pill.stale { color: var(--crit); border-color: currentColor; }
+.clock { margin-left: auto; color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.theme { background: none; border: 1px solid var(--border); color: var(--text-2); border-radius: 8px;
+  font: inherit; font-size: 13px; padding: 3px 9px; cursor: pointer; }
+
+
+/* ---- energy scene */
+.scene { position: relative; border-radius: 18px; overflow: hidden; margin-bottom: 14px; border: 1px solid #262a31;
+  background: radial-gradient(120% 80% at 50% 0%, #19202c 0%, #121722 55%, #0c1016 100%); }
+.scene svg { display: block; width: 100%; max-width: 860px; height: auto; margin: 0 auto;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); }
+.scene text { paint-order: stroke; stroke: rgba(4,8,16,.5); stroke-width: 4px; stroke-linejoin: round; }
+.scene .lbl { fill: #c9d0da; font-size: 24px; font-weight: 500; letter-spacing: .02em; }
+.scene .val { fill: #ffffff; font-size: 44px; font-weight: 650; letter-spacing: -.01em; }
+.scene .val .u { font-size: 26px; font-weight: 500; fill: #e9edf2; }
+.scene .val .up, .scene .val .soc { fill: #3ad38a; }
+.scene .sub { fill: #b9c1cc; font-size: 19px; }
+.scene .lead { stroke: #ffffff; stroke-opacity: .55; stroke-width: 1.3; }
+.scene .dot { fill: #ffffff; }
+.scene .flow { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 2 14;
+  animation: sceneflow 2s linear infinite; transition: opacity .6s; }
+.scene .flow.idle { opacity: 0; animation: none; }
+.scene .flow.rev { animation-direction: reverse; }
+@keyframes sceneflow { to { stroke-dashoffset: -64; } }
+.scene .cable { fill: none; stroke: #3ad38a; stroke-width: 4; stroke-linecap: round; opacity: 0; transition: opacity .6s; }
+.scene .cable.on { opacity: .9; }
+@media (max-width: 600px) {
+  .scene svg { -webkit-mask-image: none; mask-image: none; }
+  .scene #s-homesub { display: none; }
+  .scene .sub { font-size: 30px; fill: #d3d9e2; transform: translateY(20px); }
+  .scene .lead { stroke-width: 3; }
+  .scene .lbl { font-size: 36px; transform: translateY(-18px); }
+  .scene .val { font-size: 62px; }
+  .scene .val .u { font-size: 34px; }
+  .scene text { stroke-width: 7px; }
+}
+@media (prefers-reduced-motion: reduce) { .scene .flow { animation: none; stroke-dasharray: none; } }
+
+/* ---- two column top: picture left, controls right */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: stretch; margin-bottom: 14px; }
+.hero .scene { margin-bottom: 0; display: flex; align-items: center; }
+.hero .scene svg { max-width: none; }
+.hero .main { grid-template-columns: 1fr; margin-bottom: 0; align-content: start; }
+@media (max-width: 960px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero .main { grid-template-columns: 1.25fr 1fr; }
+  .hero .scene svg { max-width: 760px; }
+}
+@media (max-width: 760px) { .hero .main { grid-template-columns: 1fr; } }
+@media (min-width: 961px) {
+  .hero .scene .lbl { font-size: 30px; }
+  .hero .scene .val { font-size: 54px; }
+  .hero .scene .val .u { font-size: 31px; }
+  .hero .scene .sub { font-size: 25px; }
+  .hero .scene .lead { stroke-width: 1.8; }
+  .hero .scene .lbl { transform: translateY(-6px); }
+  .hero .scene .sub { transform: translateY(6px); }
+}
+
+/* ---- full charge schedule */
+.sched { margin-bottom: 14px; }
+.sched .top { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.sched .headline { flex: 1 1 280px; }
+.sched .due { font-size: 22px; font-weight: 650; letter-spacing: -.01em; margin: 4px 0 2px; }
+.sched .due.ok { color: var(--text); }
+.sched .due.soon { color: var(--warn); }
+.sched .due.late { color: var(--crit); }
+.sched .meta { font-size: 13px; color: var(--text-2); }
+.sched .why { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.sched .btn { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.sched .btn:hover { color: var(--text); border-color: var(--text-3); }
+.days7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 14px; }
+.day7 { border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; text-align: center; background: var(--surface); position: relative; }
+.day7 .dn { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.day7 .ic { height: 26px; margin: 4px auto 2px; display: block; }
+.day7 .kw { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.day7 .lb { font-size: 11px; color: var(--text-3); min-height: 15px; }
+.day7.away { opacity: .55; }
+.day7.best { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.day7 .tag { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.day7.best .tag { background: var(--good); color: #fff; }
+.day7.dueday:not(.best) .tag { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+@media (max-width: 560px) { .days7 { grid-template-columns: repeat(4, 1fr); row-gap: 14px; } .day7 .lb { display: none; } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; box-shadow: var(--shadow);
+}
+.card h2 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0 0 12px;
+  text-transform: uppercase; letter-spacing: .05em; }
+.grid { display: grid; gap: 14px; }
+.tile .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.tile .value { font-size: 30px; font-weight: 650; letter-spacing: -.02em; margin-top: 4px;
+  font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .value small { font-size: 15px; font-weight: 500; color: var(--text-2); margin-left: 3px; }
+.tile .sub { font-size: 13px; color: var(--text-3); margin-top: 4px; min-height: 19px; }
+
+.main { grid-template-columns: 1.25fr 1fr; margin-bottom: 14px; }
+@media (max-width: 760px) { .main { grid-template-columns: 1fr; } }
+.reason { font-size: 18px; font-weight: 550; line-height: 1.35; margin: 2px 0 14px; min-height: 48px; }
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--surface-2);
+  padding: 4px; border-radius: 10px; }
+.modes button {
+  font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 8px 4px;
+  background: transparent; color: var(--text-2); cursor: pointer;
+}
+.modes button:hover { color: var(--text); }
+.modes button.on { background: var(--accent); color: var(--accent-ink); }
+.modes button:disabled { opacity: .6; cursor: wait; }
+.modehelp { font-size: 13px; color: var(--text-3); margin-top: 10px; min-height: 38px; }
+.meter { margin-top: 14px; }
+.meter .bar { position: relative; height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+.meter .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--s-car); border-radius: 5px; transition: width .6s; }
+.meter .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-2); }
+.meter .legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); margin-top: 6px; }
+
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 16px; margin: 0; font-size: 14px; }
+dl.kv dt { color: var(--text-2); }
+dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.ok { color: var(--good); } .bad { color: var(--crit); } .warn { color: var(--warn); }
+
+.today { grid-template-columns: repeat(6, 1fr); margin-bottom: 14px; }
+@media (max-width: 900px) { .today { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 480px) { .today { grid-template-columns: repeat(2, 1fr); } }
+.stat .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat .value small { font-size: 13px; color: var(--text-2); font-weight: 500; margin-left: 2px; }
+.stat .label { font-size: 12px; color: var(--text-2); }
+
+.charthead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.charthead h2 { margin: 0; }
+.legendrow { display: flex; gap: 14px; font-size: 13px; color: var(--text-2); }
+.legendrow span { display: inline-flex; align-items: center; gap: 6px; }
+.range { margin-left: auto; display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; }
+.range button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-2);
+  padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.range button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.chart { position: relative; height: 280px; }
+.chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .axis text { fill: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .gridline { stroke: var(--grid); stroke-width: 1; }
+.chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .solararea { opacity: .12; }
+.chart .cross { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .dot { stroke: var(--surface); stroke-width: 2; }
+.chart .dlabel { font-size: 11px; font-weight: 600; fill: var(--text-2); }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  min-width: 150px; display: none; z-index: 5;
+}
+.tip .t { color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 7px; }
+.tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); font-size: 14px; }
+
+.bottom { grid-template-columns: 1fr 1fr; }
+@media (max-width: 760px) { .bottom { grid-template-columns: 1fr; } }
+ul.events { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow: auto; font-size: 14px; }
+ul.events li { display: grid; grid-template-columns: 62px 1fr; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }
+ul.events li:first-child { border-top: 0; }
+ul.events time { color: var(--text-3); font-variant-numeric: tabular-nums; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 4px; border-top: 1px solid var(--border); }
+th { font-weight: 600; color: var(--text-2); font-size: 12px; border-top: 0; }
+th:first-child, td:first-child { text-align: left; }
+.muted { color: var(--text-3); }
+footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
+    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a></nav>
+    <span id="runpill" class="pill">Connecting</span>
+    <span class="clock" id="clock"></span>
+    <button class="theme" id="theme" type="button" aria-label="Toggle theme">Theme</button>
+  </header>
+
+  <div class="hero">
+  <section class="scene" aria-label="Live energy flow">
+<svg viewBox="0 0 1144 1190" role="img" aria-labelledby="scenetitle" id="scenesvg">
+<title id="scenetitle">Solar, home, car and grid power right now</title>
+<defs><filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="1144" height="1190"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<image href="/img/scene.jpg" x="0" y="0" width="1144" height="1190"/>
+<path id="f-solar" class="flow idle" d="M558 666 L568 674 L578 688 L580 702 L580 773" style="stroke:#ffb347" filter="url(#glow)"/>
+<path id="f-house" class="flow idle" d="M594 806 L703 782" style="stroke:#5aa2ff" filter="url(#glow)"/>
+<path id="f-grid" class="flow idle" d="M580 828 L580 862 L592 874 L612 880 L712 906 L1000 993 L1150 1038" style="stroke:#f2f5fa" filter="url(#glow)"/>
+<path id="f-car" class="flow idle" d="M566 810 L463 834 L461 715 L418 706 L168 640 L187 678" style="stroke:#3ad38a" filter="url(#glow)"/>
+<path id="cable" class="cable" d="M187 733 L186 768 L191 793 L205 793 L222 772" filter="url(#glow)"/>
+<line class="lead" x1="250" y1="40" x2="250" y2="780"/>
+<circle class="dot" cx="250" cy="780" r="5"/>
+<line class="lead" x1="640" y1="40" x2="640" y2="370"/>
+<circle class="dot" cx="640" cy="370" r="5"/>
+<line class="lead" x1="858" y1="40" x2="858" y2="730"/>
+<circle class="dot" cx="858" cy="730" r="5"/>
+<line class="lead" x1="900" y1="1020" x2="900" y2="963"/>
+<circle class="dot" cx="900" cy="963" r="5"/>
+<g id="lab-car"><text class="lbl" x="266" y="66">Car</text><text class="val" x="266" y="112" id="s-car">&#160;</text><text class="sub" x="266" y="140" id="s-carsub"></text></g>
+<g id="lab-solar"><text class="lbl" x="656" y="66">Solar</text><text class="val" x="656" y="112" id="s-pv">&#160;</text></g>
+<g id="lab-home"><text class="lbl" x="874" y="66">Home</text><text class="val" x="874" y="112" id="s-house">&#160;</text><text class="sub" x="874" y="140" id="s-homesub">excluding the car</text></g>
+<g id="lab-grid"><text class="lbl" x="916" y="1056">Grid</text><text class="val" x="916" y="1102" id="s-grid">&#160;</text><text class="sub" x="916" y="1130" id="s-gridsub"></text></g>
+</svg>
+  </section>
+  <section class="grid main">
+    <div class="card">
+      <h2>Status</h2>
+      <div class="reason" id="reason">Loading</div>
+      <div class="modes" id="modes">
+        <button type="button" data-mode="manual">Manual</button>
+        <button type="button" data-mode="solar">Solar</button>
+        <button type="button" data-mode="minsolar">Min + Solar</button>
+        <button type="button" data-mode="fast">Fast</button>
+      </div>
+      <div class="modehelp" id="modehelp"></div>
+      <div class="meter">
+        <div class="bar"><div class="fill" id="meterfill" style="width:0"></div><div class="mark" id="metermark"></div></div>
+        <div class="legend"><span id="meterleft">Available for the car</span><span id="meterright"></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Controller</h2>
+      <dl class="kv">
+        <dt>Controller says</dt><dd id="k-on"></dd>
+        <dt>Available (1 min average)</dt><dd id="k-avail"></dd>
+        <dt>Start threshold</dt><dd id="k-start"></dd>
+        <dt>Grid allowance while charging</dt><dd id="k-allow"></dd>
+        <dt>Voltage</dt><dd id="k-volts"></dd>
+        <dt>Car battery</dt><dd id="k-soc"></dd>
+        <dt>Inverter</dt><dd id="k-inv"></dd>
+        <dt>Wall Charger</dt><dd id="k-chg"></dd>
+        <dt>Car commands</dt><dd id="k-tes"></dd>
+        <dt>Commands today</dt><dd id="k-cmd"></dd>
+      </dl>
+    </div>
+  </section>
+  </div>
+
+  <section class="card sched" id="sched" hidden>
+    <div class="top">
+      <div class="headline">
+        <h2>Full charge</h2>
+        <div class="due" id="sc-due">&nbsp;</div>
+        <div class="meta" id="sc-meta">&nbsp;</div>
+        <div class="why">LFP batteries should reach 100% about once a week so the car can keep its range estimate accurate.</div>
+      </div>
+    </div>
+    <div class="days7" id="sc-days"></div>
+  </section>
+
+  <section class="grid today">
+    <div class="card stat"><div class="label">Solar today</div><div class="value" id="t-pv"></div></div>
+    <div class="card stat"><div class="label">Car charged</div><div class="value" id="t-car"></div></div>
+    <div class="card stat"><div class="label">Car from solar</div><div class="value" id="t-share"></div></div>
+    <div class="card stat"><div class="label">Exported</div><div class="value" id="t-exp"></div></div>
+    <div class="card stat"><div class="label">Imported</div><div class="value" id="t-imp"></div></div>
+    <div class="card stat"><div class="label">Starts / stops</div><div class="value" id="t-ss"></div></div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="charthead">
+      <h2>Power</h2>
+      <div class="legendrow">
+        <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
+        <span><span class="swatch" style="background:var(--s-house)"></span>House</span>
+        <span><span class="swatch" style="background:var(--s-car)"></span>Car</span>
+      </div>
+      <div class="range" id="range">
+        <button type="button" data-min="180">3 h</button>
+        <button type="button" data-min="720">12 h</button>
+        <button type="button" data-min="1440" class="on">24 h</button>
+        <button type="button" data-min="4320">3 d</button>
+      </div>
+    </div>
+    <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+  </section>
+
+  <section class="grid bottom">
+    <div class="card">
+      <h2>Recent events</h2>
+      <ul class="events" id="events"></ul>
+    </div>
+    <div class="card">
+      <h2>Daily totals</h2>
+      <table>
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th></tr></thead>
+        <tbody id="days"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var state = null, history = [], rangeMin = 1440, busy = false, pendingMode = null, pendingAt = 0;
+
+  var MODE_HELP = {
+    manual: "Hands off. The controller watches and logs but sends nothing to the car.",
+    solar: "Charges only from surplus solar, with a small grid allowance to ride through passing clouds.",
+    minsolar: "Always charges at the minimum rate while plugged in, adding surplus solar on top.",
+    fast: "Charges at full rate now, regardless of solar."
+  };
+
+  try {
+    var saved = localStorage.getItem("sc-theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) {}
+  $("theme").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("sc-theme", next); } catch (e) {}
+    drawChart();
+  });
+
+  function kw(w) {
+    if (w === null || w === undefined) return "&nbsp;";
+    var a = Math.abs(w);
+    if (a >= 1000) return (a / 1000).toFixed(2) + "<small>kW</small>";
+    return Math.round(a) + "<small>W</small>";
+  }
+  function kwPlain(w) {
+    var a = Math.abs(w);
+    return a >= 1000 ? (a / 1000).toFixed(2) + " kW" : Math.round(a) + " W";
+  }
+  function hm(t) {
+    var d = new Date(t * 1000);
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  function setText(id, html) { var el = $(id); if (el.innerHTML !== html) el.innerHTML = html; }
+
+
+  function svgkw(w) {
+    if (w === null || w === undefined) return "";
+    var a = Math.abs(w);
+    return a >= 1000 ? (a / 1000).toFixed(1) + "<tspan class='u' dx='6'>kW</tspan>"
+                     : Math.round(a) + "<tspan class='u' dx='6'>W</tspan>";
+  }
+  function flow(id, watts, reverse) {
+    var el = $(id), a = Math.abs(watts || 0);
+    if (a < 30) { el.classList.add("idle"); return; }
+    el.classList.remove("idle");
+    el.classList.toggle("rev", !!reverse);
+    el.style.animationDuration = Math.max(0.6, 3.4 - a / 2500).toFixed(2) + "s";
+  }
+  function fmtDur(h) {
+    var m = Math.round(h * 60);
+    if (m < 1) return "under 1 min";
+    if (m < 60) return m + " min";
+    return Math.floor(m / 60) + " h " + ("0" + (m % 60)).slice(-2) + " min";
+  }
+  function timeToLimit(s, veh, carW) {
+    if (!veh || !veh.limit || veh.soc === undefined || veh.soc === null) return "";
+    if (veh.soc >= veh.limit) return " &#183; at " + veh.limit + "% limit";
+    var h = null;
+    // the car's own estimate, if it is fresh (it already reflects the current rate)
+    if (veh.ttf_h !== undefined && veh.ttf_h !== null && veh.ttf_h > 0 && Date.now() / 1000 - veh.t < 900) h = veh.ttf_h;
+    // otherwise estimate from the charging rate now, allowing about 10% charging losses
+    if (h === null && carW > 300) h = (veh.limit - veh.soc) / 100 * (s.tesla.battery_kwh || 60) / (carW * 0.9 / 1000);
+    return h === null ? " &#183; to " + veh.limit + "%" : " &#183; " + fmtDur(h) + " to " + veh.limit + "%";
+  }
+  function renderScene(s, inv, ch) {
+    var car = ch.car_w || 0;
+    setText("s-pv", inv.ok ? svgkw(inv.pv) : "n/a");
+    setText("s-house", inv.ok ? svgkw(inv.house) : "n/a");
+    var veh = s.tesla && s.tesla.vehicle, soc = veh && veh.soc !== undefined && veh.soc !== null ? veh.soc : null;
+    setText("s-car", svgkw(car) +
+      (ch.charging ? "<tspan class='u up' dx='10'>&#9650;</tspan>" : "") +
+      (soc !== null ? "<tspan class='u soc' dx='" + (ch.charging ? 4 : 12) + "'>" + soc + "%</tspan>" : ""));
+    setText("s-carsub", !ch.configured ? "Charger not set up" : !ch.ok ? "No charger data"
+      : !ch.plugged ? "Not plugged in" : ch.charging ? ch.amps.toFixed(0) + " A" + timeToLimit(s, veh, car)
+      : (veh && veh.limit && soc !== null && soc >= veh.limit) ? "Charged to " + veh.limit + "% limit" : "Plugged in, not charging");
+    if (inv.ok) {
+      setText("s-grid", svgkw(inv.grid));
+      setText("s-gridsub", inv.grid < -30 ? "Exporting" : inv.grid > 30 ? "Importing" : "");
+    }
+    flow("f-solar", inv.ok ? inv.pv : 0);
+    flow("f-house", inv.ok ? inv.house : 0);
+    flow("f-car", car);
+    flow("f-grid", inv.ok ? inv.grid : 0, inv.ok && inv.grid > 0);
+    $("cable").classList.toggle("on", !!ch.charging);
+  }
+
+  function render(s) {
+    state = s;
+    var pill = $("runpill");
+    var age = Date.now() / 1000 - (s.simulated ? Date.now() / 1000 : s.time);
+    if (s.simulated) { pill.className = "pill sim"; pill.textContent = "Simulation"; }
+    else if (age > 60) { pill.className = "pill stale"; pill.textContent = "No update for " + Math.round(age / 60) + " min"; }
+    else if (s.dry_run) { pill.className = "pill dry"; pill.textContent = "Dry run, no commands sent"; }
+    else { pill.className = "pill live"; pill.textContent = "Live"; }
+    $("clock").textContent = new Date(s.time * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    var inv = s.inverter, ch = s.charger, c = s.control, t = s.today;
+    renderScene(s, inv, ch);
+
+    setText("reason", esc(s.reason));
+    if (pendingMode && (s.mode === pendingMode || Date.now() - pendingAt > 8000)) pendingMode = null;
+    showMode(pendingMode || s.mode);
+
+    var maxW = c.max_amps * ch.volts;
+    var avail = Math.max(0, c.avg_avail);
+    $("meterfill").style.width = Math.min(100, 100 * avail / maxW) + "%";
+    $("metermark").style.left = Math.min(100, 100 * c.start_w / maxW) + "%";
+    setText("meterleft", "Available for the car: " + kwPlain(avail));
+    setText("meterright", "Start at " + kwPlain(c.start_w) + " &middot; max " + kwPlain(maxW));
+
+    setText("k-on", c.on ? "Charging at " + c.amps + " A" + (s.dry_run ? " <span class='muted'>(virtual)</span>" : "") : "Not charging");
+    setText("k-avail", (c.avg_avail < 0 ? "&minus;" : "") + kwPlain(c.avg_avail));
+    setText("k-start", kwPlain(c.start_w) + " for 3 min");
+    setText("k-allow", c.allowance + " W");
+    setText("k-volts", ch.volts.toFixed(0) + " V");
+    var v = s.tesla.vehicle;
+    setText("k-soc", v && v.soc !== null && v.soc !== undefined ? v.soc + "%" + (v.limit ? " <span class='muted'>of " + v.limit + "% limit, " + hm(v.t) + "</span>" : " <span class='muted'>" + hm(v.t) + "</span>") : "<span class='muted'>waiting for the car</span>");
+    setText("k-inv", inv.ok ? "<span class='ok'>OK</span>" : "<span class='bad'>No data</span>");
+    setText("k-chg", !ch.configured ? "<span class='warn'>Not set up</span>" : ch.ok ? "<span class='ok'>OK</span>" : "<span class='bad'>No data</span>");
+    var cc = s.tesla.control;
+    if (cc && cc.ble) {
+      var lastOk = cc.ble_last_ok ? " <span class='muted'>(last ok " + hm(cc.ble_last_ok) + ")</span>" : "";
+      setText("k-tes", cc.path === "teslemetry" ? "<span class='warn'>Teslemetry backup</span>" + lastOk
+        : cc.ble_fail > 0 && !cc.ble_ok ? "<span class='bad'>Bluetooth failing</span>"
+        : "<span class='ok'>Bluetooth</span>" + lastOk);
+    } else {
+      setText("k-tes", s.tesla.credits_out ? "<span class='bad'>Teslemetry, out of credits</span>" : s.tesla.configured ? "<span class='ok'>Teslemetry</span>" : "<span class='warn'>Not set up</span>");
+    }
+    setText("k-cmd", t.commands + (s.dry_run ? " <span class='muted'>(would have sent)</span>" : ""));
+
+    setText("t-pv", t.pv_kwh.toFixed(1) + "<small>kWh</small>");
+    setText("t-car", t.car_kwh.toFixed(1) + "<small>kWh</small>");
+    setText("t-share", t.solar_share === null ? "<span class='muted'>n/a</span>" : t.solar_share + "<small>%</small>");
+    setText("t-exp", t.export_kwh.toFixed(1) + "<small>kWh</small>");
+    setText("t-imp", t.import_kwh.toFixed(1) + "<small>kWh</small>");
+    setText("t-ss", t.starts + " / " + t.stops);
+
+    var ev = s.events.map(function (e) { return "<li><time>" + hm(e.t) + "</time><span>" + esc(e.msg) + "</span></li>"; }).join("");
+    setText("events", ev || "<li><span></span><span class='muted'>Nothing yet</span></li>");
+    $("footer").textContent = "SolarCharge " + s.version + ". Updates every few seconds.";
+  }
+
+  function poll() {
+    fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (s) { if (s && s.time) render(s); })
+      .catch(function () { var p = $("runpill"); p.className = "pill stale"; p.textContent = "Cannot reach the Pi"; });
+  }
+  function pollHistory() {
+    fetch("/api/history?minutes=4320", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (h) { history = h || []; drawChart(); }).catch(function () {});
+  }
+  function pollDays() {
+    fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      var keys = Object.keys(d).sort().reverse().slice(0, 14);
+      $("days").innerHTML = keys.map(function (k) {
+        var x = d[k], car = x.car_wh / 1000, share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
+        var dt = new Date(k + "T12:00:00");
+        var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
+      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
+    }).catch(function () {});
+  }
+
+  function showMode(mode) {
+    var btns = $("modes").querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-mode") === mode);
+    setText("modehelp", esc(MODE_HELP[mode] || ""));
+  }
+
+  $("modes").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || busy) return;
+    var mode = b.getAttribute("data-mode");
+    if (mode === (pendingMode || (state && state.mode))) return;
+    var before = pendingMode || (state && state.mode);
+    pendingMode = mode; pendingAt = Date.now();
+    showMode(mode);
+    busy = true;
+    fetch("/api/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: mode }) })
+      .then(function (r) { if (!r.ok) throw new Error("rejected"); setTimeout(poll, 300); setTimeout(poll, 1500); })
+      .catch(function () { pendingMode = null; showMode(before); alert("Couldn't reach the Pi to change the mode."); })
+      .finally(function () { busy = false; });
+  });
+
+  $("range").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    rangeMin = parseInt(b.getAttribute("data-min"), 10);
+    var all = $("range").querySelectorAll("button");
+    for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
+    drawChart();
+  });
+
+  // ---- chart
+  var SERIES = [
+    { key: 1, name: "Solar", color: "--s-solar", area: true },
+    { key: 2, name: "House", color: "--s-house" },
+    { key: 3, name: "Car", color: "--s-car" }
+  ];
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function niceMax(v) {
+    if (v <= 0) return 1000;
+    var steps = [500, 1000, 2000, 2500, 5000, 10000, 20000];
+    var raw = v / 4;
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= raw) return steps[i] * 4;
+    return Math.ceil(v / 1000) * 1000;
+  }
+
+  function drawChart() {
+    var box = $("chart"), tip = $("tip");
+    var old = box.querySelector("svg"); if (old) old.remove();
+    var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
+    var now = state ? state.time : Date.now() / 1000;
+    var from = now - rangeMin * 60;
+    var pts = history.filter(function (p) { return p[0] >= from; });
+    if (pts.length < 2) {
+      var e = document.createElement("div"); e.className = "empty";
+      e.textContent = "The chart fills in as minutes of data are collected";
+      box.appendChild(e); return;
+    }
+    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 44, mt = 10, mb = 26;
+    var iw = W - ml - mr, ih = H - mt - mb;
+    var ymax = 0;
+    pts.forEach(function (p) { ymax = Math.max(ymax, p[1], p[2], p[3]); });
+    ymax = niceMax(ymax);
+    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
+    var y = function (v) { return mt + ih - Math.max(0, v) / ymax * ih; };
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Solar, house and car power over the last " + (rangeMin / 60) + " hours");
+    var html = "<g class='axis'>";
+    for (var i = 0; i <= 4; i++) {
+      var v = ymax * i / 4, yy = y(v);
+      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
+      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + (v >= 1000 ? (v / 1000) + " kW" : v + " W") + "</text>";
+    }
+    var span = now - from, stepH = span <= 3 * 3600 ? 0.5 : span <= 12 * 3600 ? 2 : span <= 86400 ? 3 : 12;
+    if (iw < 420) stepH *= span <= 3 * 3600 ? 2 : 2;
+    var step = stepH * 3600;
+    var first = Math.ceil(from / step) * step;
+    var tz = new Date().getTimezoneOffset() * 60;
+    first = Math.ceil((from - tz) / step) * step + tz;
+    for (var t = first; t <= now; t += step) {
+      var d = new Date(t * 1000);
+      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
+      html += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
+    }
+    html += "</g>";
+    var gapLimit = 180;
+    SERIES.forEach(function (s) {
+      var d = "", area = "", seg = [];
+      var flush = function () {
+        if (seg.length < 1) return;
+        d += "M" + seg.map(function (q) { return x(q[0]).toFixed(1) + "," + y(q[s.key]).toFixed(1); }).join("L");
+        if (s.area) {
+          area += "M" + x(seg[0][0]).toFixed(1) + "," + y(0) + "L" + seg.map(function (q) { return x(q[0]).toFixed(1) + "," + y(q[s.key]).toFixed(1); }).join("L") + "L" + x(seg[seg.length - 1][0]).toFixed(1) + "," + y(0) + "Z";
+        }
+        seg = [];
+      };
+      for (var i = 0; i < pts.length; i++) {
+        if (i > 0 && pts[i][0] - pts[i - 1][0] > gapLimit) flush();
+        seg.push(pts[i]);
+      }
+      flush();
+      if (s.area) html += "<path class='solararea' d='" + area + "' style='fill:var(" + s.color + ")'/>";
+      html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>";
+    });
+    // direct labels at the right edge, nudged apart
+    var last = pts[pts.length - 1], labels = SERIES.map(function (s) { return { s: s, y: y(last[s.key]) }; });
+    labels.sort(function (a, b) { return a.y - b.y; });
+    for (var j = 1; j < labels.length; j++) if (labels[j].y - labels[j - 1].y < 13) labels[j].y = labels[j - 1].y + 13;
+    labels.forEach(function (l) {
+      html += "<text class='dlabel' x='" + (W - mr + 6) + "' y='" + (l.y + 4) + "'>" + l.s.name + "</text>";
+    });
+    html += "<line class='cross' id='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
+    SERIES.forEach(function (s, k) { html += "<circle class='dot' id='dot" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
+    html += "<rect id='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
+    svg.innerHTML = html;
+    box.insertBefore(svg, tip);
+
+    var hit = svg.querySelector("#hit"), cross = svg.querySelector("#cross");
+    function move(ev) {
+      var r = svg.getBoundingClientRect();
+      var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      var t = from + (cx - ml) / iw * (now - from);
+      var best = 0, bd = Infinity;
+      for (var i = 0; i < pts.length; i++) { var dd = Math.abs(pts[i][0] - t); if (dd < bd) { bd = dd; best = i; } }
+      var p = pts[best], px = x(p[0]);
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
+      SERIES.forEach(function (s, k) {
+        var c = svg.querySelector("#dot" + k);
+        c.setAttribute("cx", px); c.setAttribute("cy", y(p[s.key])); c.style.display = "";
+      });
+      tip.innerHTML = "<div class='t'>" + hm(p[0]) + "</div>" + SERIES.map(function (s) {
+        return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + kwPlain(p[s.key]) + "</b></div>";
+      }).join("") + "<div class='r'><span class='swatch' style='background:var(--text-3)'></span>Grid<b>" + (p[4] < 0 ? "export " : "import ") + kwPlain(p[4]) + "</b></div>";
+      tip.style.display = "block";
+      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
+      tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
+    }
+    function leave() {
+      tip.style.display = "none"; cross.style.display = "none";
+      SERIES.forEach(function (s, k) { svg.querySelector("#dot" + k).style.display = "none"; });
+    }
+    hit.addEventListener("mousemove", move);
+    hit.addEventListener("touchstart", move, { passive: true });
+    hit.addEventListener("touchmove", move, { passive: true });
+    hit.addEventListener("mouseleave", leave);
+    hit.addEventListener("touchend", leave);
+  }
+  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(drawChart, 150); });
+
+
+  // ---- full charge schedule
+  var ICON = {
+    "sunny": "<svg class='ic' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='#f5b31c'/><g stroke='#f5b31c' stroke-width='2.4' stroke-linecap='round'><path d='M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M6.8 25.2l2.8-2.8M22.4 9.6l2.8-2.8'/></g></svg>",
+    "mostly sunny": "<svg class='ic' viewBox='0 0 32 32'><circle cx='12' cy='12' r='5' fill='#f5b31c'/><g stroke='#f5b31c' stroke-width='2.2' stroke-linecap='round'><path d='M12 2v3M2 12h3M4.9 4.9l2.1 2.1M19.1 4.9L17 7'/></g><path d='M11 26h13a5 5 0 0 0 0-10 7 7 0 0 0-13 3 4 4 0 0 0 0 7z' fill='#c9ced6'/></svg>",
+    "partly cloudy": "<svg class='ic' viewBox='0 0 32 32'><circle cx='11' cy='11' r='4.5' fill='#f5b31c'/><path d='M9 27h15a6 6 0 0 0 0-12 8 8 0 0 0-15 3 4.5 4.5 0 0 0 0 9z' fill='#aab1bb'/></svg>",
+    "cloudy": "<svg class='ic' viewBox='0 0 32 32'><path d='M8 26h16a6 6 0 0 0 0-12 8 8 0 0 0-15 2.5A4.8 4.8 0 0 0 8 26z' fill='#8e959f'/></svg>",
+    "unknown": "<svg class='ic' viewBox='0 0 32 32'></svg>"
+  };
+  function dayName(iso, short) {
+    var d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString([], short ? { weekday: "short" } : { weekday: "short", day: "numeric", month: "short" });
+  }
+  function relDays(n) { return n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? "in " + n + " days" : Math.abs(n) + " days ago"; }
+
+  function renderSchedule(sc) {
+    $("sched").hidden = false;
+    var due = $("sc-due"), meta = $("sc-meta");
+    if (!sc.last_full) {
+      due.className = "due soon";
+      due.textContent = "No full charge recorded yet";
+      meta.innerHTML = "Set the car's charge limit to 100% and it will be recorded automatically when it gets there.";
+    } else {
+      var n = sc.days_left;
+      due.className = "due " + (n < 0 ? "late" : n <= 1 ? "soon" : "ok");
+      due.textContent = n < 0 ? "Overdue by " + (-n) + (n === -1 ? " day" : " days") : "Next 100% due " + dayName(sc.due) + " (" + relDays(n) + ")";
+      var lastDays = Math.round((Date.now() / 1000 - sc.last_full) / 86400);
+      meta.innerHTML = "Last 100%: " + new Date(sc.last_full * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) +
+        " (" + relDays(-lastDays) + ")" + (sc.soc !== null && sc.soc !== undefined ? " &#183; now " + sc.soc + "%" + (sc.need_kwh > 0 ? ", about " + Math.round(sc.need_kwh) + " kWh to full" : "") : "");
+    }
+    var best = sc.forecast.filter(function (d) { return d.best; })[0];
+    if (best) meta.innerHTML += "<br>Best day: <b>" + dayName(best.date) + "</b>, " + best.label + ", about " + Math.round(best.solar_kwh) + " kWh of solar forecast";
+    else if (sc.forecast_error) meta.innerHTML += "<br><span class='muted'>Solar forecast unavailable right now</span>";
+    $("sc-days").innerHTML = sc.forecast.slice(0, 7).map(function (d) {
+      var cls = "day7" + (d.home ? "" : " away") + (d.best ? " best" : "") + (d.due ? " dueday" : "");
+      var tag = d.best ? "<span class='tag'>Best</span>" : d.due ? "<span class='tag'>Due</span>" : "";
+      return "<div class='" + cls + "' title='" + (d.home ? "Car usually home all day" : "Car usually out during the day") + "'>" + tag +
+        "<div class='dn'>" + dayName(d.date, true) + "</div>" + (ICON[d.label] || ICON.unknown) +
+        "<div class='kw'>" + (d.solar_kwh !== null ? Math.round(d.solar_kwh) + " kWh" : "n/a") + "</div>" +
+        "<div class='lb'>" + d.label + "</div></div>";
+    }).join("");
+  }
+  function pollSchedule() {
+    fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
+  }
+
+  poll(); pollHistory(); pollDays(); pollSchedule();
+  setInterval(pollSchedule, 120000);
+  setInterval(poll, 5000);
+  setInterval(pollHistory, 60000);
+  setInterval(pollDays, 300000);
+})();
+</script>
+</body>
+</html>
