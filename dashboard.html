@@ -727,10 +727,20 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     var d = new Date(iso + "T12:00:00");
     return d.toLocaleDateString([], short ? { weekday: "short" } : { weekday: "short", day: "numeric", month: "short" });
   }
+  // "Today" and "Tomorrow" for the forecast days, using the Pi's date
+  var SC_TODAY = null;
+  function isoAdd(iso, n) { var d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n);
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function dayLabel(iso, short) {
+    var rel = !SC_TODAY ? "" : iso === SC_TODAY ? "Today" : iso === isoAdd(SC_TODAY, 1) ? "Tomorrow" : "";
+    if (short) return rel === "Today" ? rel : dayName(iso, true);
+    return rel ? rel + " (" + dayName(iso) + ")" : dayName(iso);
+  }
   function relDays(n) { return n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? "in " + n + " days" : Math.abs(n) + " days ago"; }
 
   function renderSchedule(sc) {
     $("sched").hidden = false;
+    SC_TODAY = sc.today || null;
     var due = $("sc-due"), meta = $("sc-meta");
     if (!sc.last_full) {
       due.className = "due soon";
@@ -745,13 +755,13 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         " (" + relDays(-lastDays) + ")" + (sc.soc !== null && sc.soc !== undefined ? " &#183; now " + sc.soc + "%" + (sc.need_kwh > 0 ? ", about " + Math.round(sc.need_kwh) + " kWh to full" : "") : "");
     }
     var best = sc.forecast.filter(function (d) { return d.best; })[0];
-    if (best) meta.innerHTML += "<br>Best day: <b>" + dayName(best.date) + "</b>, " + best.label + ", about " + Math.round(best.solar_kwh) + " kWh of solar forecast";
+    if (best) meta.innerHTML += "<br>Best day: <b>" + dayLabel(best.date) + "</b>, " + best.label + ", about " + Math.round(best.solar_kwh) + " kWh of solar forecast";
     else if (sc.forecast_error) meta.innerHTML += "<br><span class='muted'>Solar forecast unavailable right now</span>";
     $("sc-days").innerHTML = sc.forecast.slice(0, 7).map(function (d) {
       var cls = "day7" + (d.home ? "" : " away") + (d.best ? " best" : "") + (d.due ? " dueday" : "");
       var tag = d.best ? "<span class='tag'>Best</span>" : d.due ? "<span class='tag'>Due</span>" : "";
       return "<div class='" + cls + "' title='" + (d.home ? "Car usually home all day" : "Car usually out during the day") + "'>" + tag +
-        "<div class='dn'>" + dayName(d.date, true) + "</div>" + (ICON[d.label] || ICON.unknown) +
+        "<div class='dn'>" + dayLabel(d.date, true) + "</div>" + (ICON[d.label] || ICON.unknown) +
         "<div class='kw'>" + (d.solar_kwh !== null ? Math.round(d.solar_kwh) + " kWh" : "n/a") + "</div>" +
         "<div class='lb'>" + d.label + "</div></div>";
     }).join("");

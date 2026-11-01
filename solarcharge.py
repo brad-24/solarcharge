@@ -401,8 +401,8 @@ class Forecast(object):
 
     def fetch(self):
         url = ("https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
-               "&daily=shortwave_radiation_sum,precipitation_probability_max,cloud_cover_mean"
-               "&timezone=Australia%%2FBrisbane&forecast_days=8") % (self.s.lat, self.s.lon)
+               "&daily=shortwave_radiation_sum,precipitation_probability_max,cloud_cover_mean,sunset"
+               "&timezone=auto&forecast_days=8") % (self.s.lat, self.s.lon)
         req = Request(url, headers={"User-Agent": "solarcharge/" + VERSION})
         with urlopen(req, timeout=20) as r:
             d = json.loads(r.read().decode("utf-8")).get("daily") or {}
@@ -415,6 +415,7 @@ class Forecast(object):
         rad = d.get("shortwave_radiation_sum") or []
         rain = d.get("precipitation_probability_max") or []
         cloud = d.get("cloud_cover_mean") or []
+        sunset = d.get("sunset") or []
         for i, day in enumerate(dates):
             mj = rad[i] if i < len(rad) and rad[i] is not None else None
             # MJ/m2 to kWh/m2, times system size, times a typical 0.8 performance ratio
@@ -431,7 +432,8 @@ class Forecast(object):
             else:
                 label = "cloudy"
             out.append({"date": day, "solar_kwh": kwh, "label": label,
-                        "rain": rain[i] if i < len(rain) else None, "cloud": c})
+                        "rain": rain[i] if i < len(rain) else None, "cloud": c,
+                        "sunset": sunset[i] if i < len(sunset) else None})
         return out
 
 class BleTesla(object):
@@ -1364,6 +1366,8 @@ class Controller(object):
                 continue
             if d < today:
                 continue
+            if d == today and self._day_over(f, now):
+                continue    # the sun has set, so today can't be the full charge day any more
             item = dict(f)
             item["home"] = d.weekday() in self.s.home_days
             item["due"] = due is not None and d.toordinal() == due
@@ -1389,7 +1393,17 @@ class Controller(object):
             "forecast": days,
             "forecast_error": self.forecast.error if self.forecast else "off",
             "best": best,
+            "today": today.strftime("%Y-%m-%d"),
         }
+
+    @staticmethod
+    def _day_over(f, now):
+        """True once the forecast day's sun has set (6 pm if the forecast has no sunset time)."""
+        try:
+            t = datetime.strptime(f.get("sunset") or "", "%Y-%m-%dT%H:%M")
+        except ValueError:
+            t = datetime.strptime(f["date"] + "T18:00", "%Y-%m-%dT%H:%M")
+        return now >= time.mktime(t.timetuple())
 
     def _vehicle_poll(self, now, chg):
         # Over Bluetooth, reading the battery is free: read it every few minutes while charging.
