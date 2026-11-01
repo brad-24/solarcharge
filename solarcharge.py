@@ -70,7 +70,7 @@ DEFAULTS = {
     },
     "schedule": {
         "full_charge_every_days": "7",
-        "home_all_day": "sat,sun",
+        "home_all_day": "mon,tue,wed,thu,fri,sat,sun",
         "forecast": "false",
         "latitude": "0",
         "longitude": "0",
