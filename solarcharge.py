@@ -1020,6 +1020,8 @@ class Controller(object):
         self.below_since = None
         self.not_charging_since = None
         self.self_started = False
+        self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
+        self.self_starts = deque()       # times the car restarted by itself, to catch a stop and start loop
         self.grid_samples = deque()
         self.raises = deque()
         self.credits_out = False
@@ -1271,6 +1273,17 @@ class Controller(object):
             self.reason = "Car not plugged in"
             return
 
+        # A plugged in car powers climate, Sentry and the like from the wall, which closes the
+        # contactor and draws a couple of amps. That isn't a charge, and a stop command won't end it,
+        # so leave it alone. A real charge the car starts by itself runs at its set amps (5 A or more).
+        small = actual and not self.on and chg["amps"] < s.min_amps - 0.5
+        if small and not self.small_draw:
+            self.event("Car is drawing %.0f A for its own use (climate or Sentry), not charging. Leaving it alone"
+                       % chg["amps"])
+        self.small_draw = small
+        if small:
+            actual = False
+
         # keep our belief in step with the car (real mode only)
         if not self.dry_run:
             if actual and not self.on:
@@ -1278,9 +1291,19 @@ class Controller(object):
                 self.on_since = now - s.min_run
                 self.amps = self._clamp(round(chg["amps"]) or s.min_amps)
                 self.last_amp_change = now - max(s.up_interval, s.down_interval)  # allow an immediate correction
-                if self.mode != "manual":
+                if self.mode != "manual" and now >= self.refused_until:
                     self.self_started = True
                     self.event("Car started charging by itself at %.0f A" % chg["amps"])
+                    # safety net: if it keeps starting again straight after each stop, stop sending stops
+                    self.self_starts.append(now)
+                    while self.self_starts and now - self.self_starts[0] > 600:
+                        self.self_starts.popleft()
+                    if len(self.self_starts) >= 3:
+                        self.self_starts.clear()
+                        self.self_started = False
+                        self.refused_until = now + s.no_charge_backoff
+                        self.event("Car keeps restarting after being told to stop. Leaving it alone until %s"
+                                   % time.strftime("%H:%M", time.localtime(self.refused_until)), logging.WARNING)
             elif self.on and not actual:
                 if self.not_charging_since is None:
                     self.not_charging_since = now
