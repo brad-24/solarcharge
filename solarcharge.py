@@ -873,7 +873,7 @@ class Storage(object):
 
     MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c,outside_c,range_km\n"
     DAILY_HEADER = ("date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands,"
-                    "odometer_km,driven_km,top_kmh\n")
+                    "odometer_km,driven_km,top_kmh,tyre_fl_psi,tyre_fr_psi,tyre_rl_psi,tyre_rr_psi\n")
 
     def _append(self, path, header, lines):
         try:
@@ -1043,6 +1043,8 @@ class Controller(object):
         self.vehicle = st.get("vehicle")
         # car telemetry for the Car chart: [time, battery %, cabin C], recorded as values arrive
         self.car_history = deque(st.get("car_history", []), maxlen=8000)
+        # tyre pressures per day: {date: {"fl": [sum, count], ...}}, for the Tyres chart (90 days)
+        self.tyre_days = st.get("tyre_days") or self._tyres_from_history()
         self.vehicle_check = True       # one-off battery read when the car is awake (startup, plug in, charge end)
         self.vehicle_check_next = 0.0
         self.vehicle_next = 0.0
@@ -1426,6 +1428,14 @@ class Controller(object):
                 if "odo_start" not in self.today:
                     self.today["odo_start"] = v.get("odo_km") if v.get("odo_km") is not None else upd["odo_km"]
                 self.today["odo_end"] = upd["odo_km"]
+            day = time.strftime("%Y-%m-%d", time.localtime(now))
+            for w in ("fl", "fr", "rl", "rr"):
+                if upd.get("tp_" + w) is not None:
+                    acc = self.tyre_days.setdefault(day, {}).setdefault(w, [0.0, 0])
+                    acc[0] += upd["tp_" + w]
+                    acc[1] += 1
+            for old in sorted(self.tyre_days)[:-90]:
+                del self.tyre_days[old]
             if upd.get("speed_kmh"):
                 self.today["top_kmh"] = max(self.today.get("top_kmh", 0), upd["speed_kmh"])
             v.update(upd)
@@ -1460,6 +1470,32 @@ class Controller(object):
         h.append([now] + vals)
         while h and now - h[0][0] > self.CAR_KEEP_S:
             h.popleft()
+
+    def _tyres_from_history(self):
+        """Seeds the daily tyre averages from the car history (used once, after updating)."""
+        out = {}
+        for p in getattr(self, "car_history", []):
+            day = time.strftime("%Y-%m-%d", time.localtime(p[0]))
+            for i, w in enumerate(("fl", "fr", "rl", "rr")):
+                v = p[5 + i] if len(p) > 5 + i else None
+                if v is not None:
+                    acc = out.setdefault(day, {}).setdefault(w, [0.0, 0])
+                    acc[0] += v
+                    acc[1] += 1
+        return out
+
+    def get_tyres(self, days):
+        """[[date, FL, FR, RL, RR], ...] daily average pressures in psi, oldest first."""
+        with self.lock:
+            td = {k: dict(v) for k, v in self.tyre_days.items()}
+        out = []
+        for day in sorted(td)[-days:]:
+            row = [day]
+            for w in ("fl", "fr", "rl", "rr"):
+                acc = td[day].get(w)
+                row.append(round(acc[0] / acc[1], 1) if acc and acc[1] else None)
+            out.append(row)
+        return out
 
     def get_car_history(self, hours):
         with self.lock:
@@ -1722,6 +1758,7 @@ class Controller(object):
             hist = list(self.history)
             car = list(self.car_history)
             days = dict(self.days)
+        tyres = {r[0]: r[1:] for r in self.get_tyres(90)}
         if self.archived_through:
             try:
                 start = date(*map(int, self.archived_through.split("-"))) + timedelta(days=1)
@@ -1754,12 +1791,13 @@ class Controller(object):
             if t:
                 odo = t.get("odo_end")
                 driven = (odo - t["odo_start"]) if odo is not None and t.get("odo_start") is not None else None
-                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s,%s\n" % (
+                tp = ",".join("" if v is None else str(v) for v in tyres.get(key, [None] * 4))
+                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s,%s,%s\n" % (
                     key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
                     t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
                     t.get("starts", 0), t.get("stops", 0), t.get("commands", 0),
                     "%.1f" % odo if odo is not None else "", "%.1f" % driven if driven is not None else "",
-                    t.get("top_kmh", "")))
+                    t.get("top_kmh", ""), tp))
             d += timedelta(days=1)
         self.archived_through = yday.isoformat()
         self._save(now)
@@ -1778,6 +1816,7 @@ class Controller(object):
             "last_full": self.last_full,
             "vehicle": self.vehicle,
             "car_history": list(self.car_history),
+            "tyre_days": self.tyre_days,
             "archived_through": self.archived_through,
             "saved": now,
         })
@@ -1914,6 +1953,13 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 hours = 168
             self._json(c.get_car_history(hours))
+        elif u.path == "/api/tyres":
+            q = parse_qs(u.query)
+            try:
+                days = int(q.get("days", ["90"])[0])
+            except ValueError:
+                days = 90
+            self._json(c.get_tyres(days))
         elif u.path == "/api/sessions":
             self._json(c.get_sessions())
         elif u.path == "/api/export":
@@ -2086,6 +2132,14 @@ def main():
         log.warning("Teslemetry token or VIN missing, commands will fail")
 
     if args.simulate:
+        # a month of made up tyre history, with the rear right slowly losing air
+        for i in range(30, 0, -1):
+            day = time.strftime("%Y-%m-%d", time.localtime(clock() - i * 86400))
+            if random.random() < 0.8:
+                base = 41.5 + random.uniform(-0.4, 0.4)
+                ctl.tyre_days[day] = {"fl": [base + 0.3, 1], "fr": [base, 1], "rl": [base + 0.1, 1],
+                                      "rr": [base - (30 - i) * 0.12, 1]}
+
         def fake_stream():
             while True:
                 cs, _ = tesla.charge_state()
