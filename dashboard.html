@@ -600,6 +600,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     $("cable").classList.toggle("on", !!ch.charging);
   }
 
+  // the clock ticks every second from the Pi's time; the data refreshes every 10 seconds
+  var clockBase = null;
+  function tickClock() {
+    if (!clockBase) return;
+    var t = clockBase[0] + (Date.now() / 1000 - clockBase[1]);
+    $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
   function render(s) {
     state = s;
     var pill = $("runpill");
@@ -608,7 +616,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     else if (age > 60) { pill.className = "pill stale"; pill.textContent = "No update for " + Math.round(age / 60) + " min"; }
     else if (s.dry_run) { pill.className = "pill dry"; pill.textContent = "Dry run, no commands sent"; }
     else { pill.className = "pill live"; pill.textContent = "Live"; }
-    $("clock").textContent = new Date(s.time * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    clockBase = [s.time, Date.now() / 1000];
+    tickClock();
 
     var inv = s.inverter, ch = s.charger, c = s.control, t = s.today;
     renderScene(s, inv, ch);
@@ -653,7 +662,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 
     var ev = s.events.map(function (e) { return "<li><time>" + hm(e.t) + "</time><span>" + esc(e.msg) + "</span></li>"; }).join("");
     setText("events", ev || "<li><span></span><span class='muted'>Nothing yet</span></li>");
-    $("footer").textContent = "SolarCharge " + s.version + ". Updates every few seconds.";
+    $("footer").textContent = "SolarCharge " + s.version + ". Updates every 10 seconds.";
   }
 
   function poll() {
@@ -1236,7 +1245,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   setInterval(pollExports, 3600000);
   setInterval(pollCar, 60000);
   setInterval(pollSchedule, 120000);
-  setInterval(poll, 5000);
+  setInterval(poll, 10000);
+  setInterval(tickClock, 1000);
   setInterval(pollHistory, 60000);
   setInterval(pollDays, 300000);
 })();
