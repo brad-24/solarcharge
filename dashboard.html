@@ -876,7 +876,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     box: "cchart", tip: "ctip", label: "Battery level and tyre pressures",
     left: { unit: "%", fixed: [0, 100] },
     series: [
-      { key: 1, name: "Battery", color: "--s-car", axis: "left", fmt: function (v) { return Math.round(v) + "%"; } }
+      { key: 1, name: "Battery", color: "--s-car", axis: "left", join: true, fmt: function (v) { return Math.round(v) + "%"; } }
     ],
     empty: "Fills in as the car reports its battery level"
   };
@@ -911,7 +911,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     var tlast = Math.max(lc ? lc[0] : 0, lo ? lo[0] : 0);
     $("tnote").textContent = (tlast ? "Last reading " + when(tlast) + ". " : "") + "The car only reports while it's awake, so gaps are normal while it sleeps.";
     var clast = ls ? ls[0] : 0;
-    $("cnote").textContent = (clast ? "Last reading " + when(clast) + ". " : "") + "The car only reports while it's awake, so gaps are normal while it sleeps.";
+    $("cnote").textContent = (clast ? "Last reading " + when(clast) + ". " : "") + "While the car sleeps, the line holds its last reported level.";
   }
   function niceRange(vals, ax) {
     if (ax.fixed) return ax.fixed;
@@ -986,6 +986,15 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     cfg.series.forEach(function (s) {
       var sp = pts.filter(function (p) { return has(p, s.key); });
       var d = "", seg = [], dots = "";
+      if (s.join && sp.length) {
+        // battery barely changes while parked: hold each reading until the next one, as steps
+        d = "M" + x(sp[0][0]).toFixed(1) + "," + yOf(s, sp[0][s.key]).toFixed(1);
+        for (var j = 1; j < sp.length; j++) {
+          d += "H" + x(sp[j][0]).toFixed(1) + "V" + yOf(s, sp[j][s.key]).toFixed(1);
+        }
+        html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>";
+        return;
+      }
       var flush = function () {
         if (seg.length === 1) dots += "<circle r='2.5' cx='" + x(seg[0][0]).toFixed(1) + "' cy='" + yOf(s, seg[0][s.key]).toFixed(1) + "' style='fill:var(" + s.color + ")'/>";
         else if (seg.length > 1) d += "M" + seg.map(function (q) { return x(q[0]).toFixed(1) + "," + yOf(s, q[s.key]).toFixed(1); }).join("L");
@@ -1005,7 +1014,17 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     box.insertBefore(svg, tip);
 
     var hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross"), dotsEl = svg.querySelectorAll(".dot");
-    function nearest(key, t) {
+    function lastWith(key) {
+      for (var j = pts.length - 1; j >= 0; j--) if (has(pts[j], key)) return pts[j][0];
+      return 0;
+    }
+    function nearest(key, t, join) {
+      if (join) {
+        // the reading in force at that time: the last one at or before it
+        var held = null;
+        for (var j = 0; j < pts.length; j++) { if (pts[j][0] > t) break; if (has(pts[j], key)) held = pts[j]; }
+        if (held) return held;
+      }
       var best = null, bd = Infinity;
       for (var i = 0; i < pts.length; i++) {
         if (!has(pts[i], key)) continue;
@@ -1019,10 +1038,11 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       var t = from + (cx - ml) / iw * (now - from);
       var rows = "", anyT = null;
       cfg.series.forEach(function (s, k) {
-        var p = nearest(s.key, t), c = dotsEl[k];
+        var p = nearest(s.key, t, s.join), c = dotsEl[k];
         if (p) {
-          if (anyT === null) anyT = p[0];
-          c.setAttribute("cx", x(p[0])); c.setAttribute("cy", yOf(s, p[s.key])); c.style.display = "";
+          var at = s.join && t > p[0] && t <= lastWith(s.key) ? t : p[0];   // a held value sits under the pointer
+          if (anyT === null) anyT = at;
+          c.setAttribute("cx", x(at)); c.setAttribute("cy", yOf(s, p[s.key])); c.style.display = "";
           rows += "<div class='r'><span class='swatch" + (s.dash ? " dashed' style='--dash:var(" + s.color + ")" : "' style='background:var(" + s.color + ")") + "'></span>" + s.name + "<b>" + s.fmt(p[s.key]) + "</b></div>";
         } else c.style.display = "none";
       });
