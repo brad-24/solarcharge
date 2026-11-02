@@ -299,6 +299,18 @@ th { font-weight: 600; color: var(--text-2); font-size: 12px; border-top: 0; }
 th:first-child, td:first-child { text-align: left; }
 .muted { color: var(--text-3); }
 footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: center; }
+
+.theme { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 30px; padding: 0 !important; }
+.theme svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme .i-moon path { fill: currentColor; stroke: none; }
+.theme .i-sun { display: none; }
+:root[data-theme="dark"] .theme .i-sun { display: block; }
+:root[data-theme="dark"] .theme .i-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme .i-sun { display: block; }
+  :root:not([data-theme="light"]) .theme .i-moon { display: none; }
+}
+.theme:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -308,7 +320,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
-    <button class="theme" id="theme" type="button" aria-label="Toggle theme">Theme</button>
+    <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
   <div class="hero">
