@@ -420,6 +420,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         <button type="button" data-h="24" class="on">24 h</button>
         <button type="button" data-h="72">3 d</button>
         <button type="button" data-h="168">7 d</button>
+        <button type="button" data-h="720">30 d</button>
+        <button type="button" data-h="2160">90 d</button>
       </div>
     </div>
     <div class="chart short" id="tchart"><div class="tip" id="ttip"></div></div>
@@ -436,6 +438,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         <button type="button" data-h="24" class="on">24 h</button>
         <button type="button" data-h="72">3 d</button>
         <button type="button" data-h="168">7 d</button>
+        <button type="button" data-h="720">30 d</button>
+        <button type="button" data-h="2160">90 d</button>
       </div>
     </div>
     <div class="chart short" id="cchart"><div class="tip" id="ctip"></div></div>
@@ -458,12 +462,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         <span><span class="swatch dashed" style="--dash:var(--t-right)"></span>RR <b id="yl-rr"></b></span>
       </div>
       <div class="range" id="yrange">
+        <button type="button" data-d="3">3 d</button>
+        <button type="button" data-d="7">7 d</button>
         <button type="button" data-d="30" class="on">30 d</button>
         <button type="button" data-d="90">90 d</button>
       </div>
     </div>
     <div class="chart short" id="ychart"><div class="tip" id="ytip"></div></div>
-    <div class="chartnote">Average pressure each day, in psi. Pressures rise a few psi as tyres warm up while driving; watch for one tyre drifting away from the others.</div>
+    <div class="chartnote" id="ynote"></div>
   </section>
 
   <section class="grid bottom">
@@ -855,7 +861,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   };
 
   function pollCar() {
-    fetch("/api/carhistory?hours=168", { cache: "no-store" }).then(function (r) { return r.json(); })
+    fetch("/api/carhistory?hours=" + Math.max(carHours, 168), { cache: "no-store" }).then(function (r) { return r.json(); })
       .then(function (h) { carHist = h || []; drawTele(TEMPS); drawTele(CAR); carLegend(); }).catch(function () {});
   }
   document.querySelectorAll(".trange").forEach(function (el) {
@@ -866,6 +872,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       // both charts share the period
       document.querySelectorAll(".trange button").forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-h") === String(carHours)); });
       drawTele(TEMPS); drawTele(CAR);
+      if (carHours > 168) pollCar();   // the longer periods are fetched when asked for
     });
   });
   function lastOf(key) {
@@ -895,6 +902,29 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     // four even gridlines
     var q = Math.ceil((hi - lo) / 4 / ax.step) * ax.step; hi = lo + q * 4;
     return [lo, hi];
+  }
+
+  // x axis labels for a time range: hours for a day, weekdays for up to a week, dates beyond
+  function timeLabels(from, now, x, H, iw) {
+    var span = now - from, out = "", tz = new Date().getTimezoneOffset() * 60, d, t;
+    if (span > 8 * 86400) {
+      var every = span > 40 * 86400 ? (iw < 420 ? 30 : 15) : (iw < 420 ? 10 : 5);
+      var day0 = Math.ceil((from - tz) / 86400) * 86400 + tz;
+      for (t = day0 + Math.floor((now - day0) / 86400) % every * 86400; t <= now; t += every * 86400) {
+        out += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" +
+          new Date(t * 1000).toLocaleDateString([], { day: "numeric", month: "short" }) + "</text>";
+      }
+      return out;
+    }
+    var stepH = span <= 86400 ? 3 : span <= 3 * 86400 ? 12 : 24;
+    if (iw < 420) stepH *= 2;
+    var step = stepH * 3600;
+    for (t = Math.ceil((from - tz) / step) * step + tz; t <= now; t += step) {
+      d = new Date(t * 1000);
+      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
+      out += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
+    }
+    return out;
   }
 
   function drawTele(cfg) {
@@ -930,15 +960,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       if (rR) html += "<text x='" + (W - mr + 8) + "' y='" + (yy + 4) + "'>" + Math.round(rR[0] + (rR[1] - rR[0]) * i / 4) + cfg.right.unit + "</text>";
     }
     if (rR) html += "<text x='" + (W - 2) + "' y='" + (mt + ih + 18) + "' text-anchor='end'>psi</text>";
-    var span = now - from, stepH = span <= 86400 ? 3 : span <= 3 * 86400 ? 12 : 24;
-    if (iw < 420) stepH *= 2;
-    var step = stepH * 3600, tz = new Date().getTimezoneOffset() * 60;
-    for (var t = Math.ceil((from - tz) / step) * step + tz; t <= now; t += step) {
-      var d = new Date(t * 1000);
-      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
-      html += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
-    }
-    html += "</g>";
+    html += timeLabels(from, now, x, H, iw) + "</g>";
+    var gap = carHours > 168 ? 3 * 3600 : GAP;   // older readings are half hourly, so allow longer gaps
     cfg.series.forEach(function (s) {
       var sp = pts.filter(function (p) { return has(p, s.key); });
       var d = "", seg = [], dots = "";
@@ -948,7 +971,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         seg = [];
       };
       for (var i = 0; i < sp.length; i++) {
-        if (i > 0 && sp[i][0] - sp[i - 1][0] > GAP) flush();
+        if (i > 0 && sp[i][0] - sp[i - 1][0] > gap) flush();
         seg.push(sp[i]);
       }
       flush();
@@ -967,7 +990,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         if (!has(pts[i], key)) continue;
         var dd = Math.abs(pts[i][0] - t); if (dd < bd) { bd = dd; best = pts[i]; }
       }
-      return bd <= GAP ? best : null;
+      return bd <= gap ? best : null;
     }
     function move(ev) {
       var r = svg.getBoundingClientRect();
@@ -985,7 +1008,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       if (anyT === null) { leave(); return; }
       var px = x(anyT);
       cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      tip.innerHTML = "<div class='t'>" + (carHours > 24 ? new Date(anyT * 1000).toLocaleDateString([], { weekday: "short" }) + " " : "") + hm(anyT) + "</div>" + rows;
+      tip.innerHTML = "<div class='t'>" + (carHours > 168 ? new Date(anyT * 1000).toLocaleDateString([], { day: "numeric", month: "short" }) + " "
+        : carHours > 24 ? new Date(anyT * 1000).toLocaleDateString([], { weekday: "short" }) + " " : "") + hm(anyT) + "</div>" + rows;
       tip.style.display = "block";
       var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
       tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
@@ -1001,8 +1025,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     hit.addEventListener("touchend", leave);
   }
 
-  // ---- tyres: one point per tyre per day, joined across days without readings
-  var tyreRows = [], tyreDays = 30;
+  // ---- tyres: every reading for 3 or 7 days, one average per day for 30 or 90 days; lines join across gaps
+  var tyreRows = [], tyreRaw = [], tyreDays = 30;
   var TYRES = [
     { i: 1, name: "FL", color: "--t-left" }, { i: 2, name: "FR", color: "--t-right" },
     { i: 3, name: "RL", color: "--t-left", dash: true }, { i: 4, name: "RR", color: "--t-right", dash: true }
@@ -1010,6 +1034,12 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   function pollTyres() {
     fetch("/api/tyres?days=90", { cache: "no-store" }).then(function (r) { return r.json(); })
       .then(function (rows) { tyreRows = rows || []; drawTyres(); }).catch(function () {});
+    fetch("/api/carhistory?hours=168", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (h) {
+        tyreRaw = (h || []).filter(function (p) { return p.length > 5 && [5, 6, 7, 8].some(function (k) { return p[k] !== null && p[k] !== undefined; }); })
+          .map(function (p) { return [p[0], p[5], p[6], p[7], p[8]].map(function (v) { return v === undefined ? null : v; }); });
+        drawTyres();
+      }).catch(function () {});
   }
   $("yrange").addEventListener("click", function (e) {
     var b = e.target.closest("button");
@@ -1019,22 +1049,33 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
     drawTyres();
   });
-  function dayNum(iso) { return Math.round(new Date(iso + "T12:00:00").getTime() / 86400000); }
   function drawTyres() {
     var box = $("ychart"), tip = $("ytip");
     var old = box.querySelector("svg"); if (old) old.remove();
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
+    var raw = tyreDays <= 7;
+    $("ynote").textContent = (raw ? "Every reading, in psi." : "Average pressure each day, in psi.") +
+      " Pressures rise a few psi as tyres warm up while driving; watch for one tyre drifting away from the others.";
+    // rows as [time, FL, FR, RL, RR]; daily averages are placed at midday
+    var now = state ? state.time : Date.now() / 1000, from, rows;
+    if (raw) {
+      from = now - tyreDays * 86400;
+      rows = tyreRaw.filter(function (r) { return r[0] >= from; });
+    } else {
+      var nd = new Date(now * 1000); nd.setHours(0, 0, 0, 0);
+      from = nd.getTime() / 1000 - (tyreDays - 1) * 86400;
+      now = from + tyreDays * 86400;
+      rows = tyreRows.map(function (r) { return [new Date(r[0] + "T12:00:00").getTime() / 1000].concat(r.slice(1)); })
+        .filter(function (r) { return r[0] >= from; });
+    }
     TYRES.forEach(function (t) {
-      var last = null;
-      tyreRows.forEach(function (r) { if (r[t.i] !== null) last = r[t.i]; });
+      var src = raw ? tyreRaw : tyreRows, last = null;
+      src.forEach(function (r) { if (r[t.i] !== null) last = r[t.i]; });
       $("yl-" + t.name.toLowerCase()).textContent = last !== null ? last.toFixed(1) : "";
     });
-    var nd = new Date(), today = dayNum(nd.getFullYear() + "-" + ("0" + (nd.getMonth() + 1)).slice(-2) + "-" + ("0" + nd.getDate()).slice(-2));
-    var first = today - tyreDays + 1;
-    var rows = tyreRows.filter(function (r) { return dayNum(r[0]) >= first; });
     if (!rows.length) {
       var e = document.createElement("div"); e.className = "empty";
-      e.textContent = "Fills in as the car reports its tyre pressures, mostly while driving";
+      e.textContent = (raw ? tyreRaw : tyreRows).length ? "No tyre readings in this period" : "Fills in as the car reports its tyre pressures, mostly while driving";
       box.appendChild(e); return;
     }
     var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 14, mt = 10, mb = 26;
@@ -1044,7 +1085,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     var lo = Math.floor(Math.min.apply(null, vals) - 1), hi = Math.ceil(Math.max.apply(null, vals) + 1);
     if (hi - lo < 8) { var mid = (lo + hi) / 2; lo = Math.floor(mid - 4); hi = lo + 8; }
     var q = Math.ceil((hi - lo) / 4); hi = lo + q * 4;
-    var x = function (dn) { return ml + (dn - first + 0.5) / tyreDays * iw; };
+    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
     var y = function (v) { return mt + ih - (v - lo) / (hi - lo) * ih; };
     var html = "<g class='axis'>";
     for (var i = 0; i <= 4; i++) {
@@ -1052,40 +1093,37 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
       html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + v + "</text>";
     }
-    var every = tyreDays <= 30 ? (iw < 420 ? 10 : 5) : (iw < 420 ? 30 : 15);
-    for (var dn = today; dn >= first; dn -= every) {
-      var lbl = new Date(dn * 86400000 + 43200000).toLocaleDateString([], { day: "numeric", month: "short" });
-      html += "<text x='" + x(dn) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
-    }
-    html += "</g>";
+    html += timeLabels(from, now, x, H, iw) + "</g>";
+    var dotR = raw && rows.length > 60 ? 1.5 : 2.5;
     TYRES.forEach(function (t) {
       var pts = rows.filter(function (r) { return r[t.i] !== null; });
       if (!pts.length) return;
-      var d = "M" + pts.map(function (r) { return x(dayNum(r[0])).toFixed(1) + "," + y(r[t.i]).toFixed(1); }).join("L");
+      var d = "M" + pts.map(function (r) { return x(r[0]).toFixed(1) + "," + y(r[t.i]).toFixed(1); }).join("L");
       html += "<path class='line' d='" + d + "' style='stroke:var(" + t.color + ")" + (t.dash ? ";stroke-dasharray:5 4" : "") + "'/>";
-      html += pts.map(function (r) { return "<circle r='2.5' cx='" + x(dayNum(r[0])).toFixed(1) + "' cy='" + y(r[t.i]).toFixed(1) + "' style='fill:var(" + t.color + ")'/>"; }).join("");
+      html += pts.map(function (r) { return "<circle r='" + dotR + "' cx='" + x(r[0]).toFixed(1) + "' cy='" + y(r[t.i]).toFixed(1) + "' style='fill:var(" + t.color + ")'/>"; }).join("");
     });
     html += "<line class='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
     html += "<rect class='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
     var NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "Average tyre pressures per day over the last " + tyreDays + " days");
+    svg.setAttribute("aria-label", "Tyre pressures over the last " + tyreDays + " days");
     svg.innerHTML = html;
     box.insertBefore(svg, tip);
     var hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross");
     function move(ev) {
       var r = svg.getBoundingClientRect();
       var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-      var dn = first + (cx - ml) / iw * tyreDays - 0.5, best = null, bd = Infinity;
-      rows.forEach(function (row) { var dd = Math.abs(dayNum(row[0]) - dn); if (dd < bd) { bd = dd; best = row; } });
+      var t = from + (cx - ml) / iw * (now - from), best = null, bd = Infinity;
+      rows.forEach(function (row) { var dd = Math.abs(row[0] - t); if (dd < bd) { bd = dd; best = row; } });
       if (!best) return;
-      var px = x(dayNum(best[0]));
+      var px = x(best[0]);
       cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      tip.innerHTML = "<div class='t'>" + new Date(best[0] + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
-        TYRES.map(function (t) {
-          return "<div class='r'><span class='swatch" + (t.dash ? " dashed' style='--dash:var(" + t.color + ")" : "' style='background:var(" + t.color + ")") + "'></span>" + t.name +
-            "<b>" + (best[t.i] !== null ? best[t.i].toFixed(1) + " psi" : "n/a") + "</b></div>";
+      var dt = new Date(best[0] * 1000);
+      tip.innerHTML = "<div class='t'>" + dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + (raw ? " " + hm(best[0]) : "") + "</div>" +
+        TYRES.map(function (tt) {
+          return "<div class='r'><span class='swatch" + (tt.dash ? " dashed' style='--dash:var(" + tt.color + ")" : "' style='background:var(" + tt.color + ")") + "'></span>" + tt.name +
+            "<b>" + (best[tt.i] !== null ? best[tt.i].toFixed(1) + " psi" : "n/a") + "</b></div>";
         }).join("");
       tip.style.display = "block";
       var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;

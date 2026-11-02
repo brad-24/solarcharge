@@ -1042,7 +1042,8 @@ class Controller(object):
         self.last_save = clock()
         self.vehicle = st.get("vehicle")
         # car telemetry for the Car chart: [time, battery %, cabin C], recorded as values arrive
-        self.car_history = deque(st.get("car_history", []), maxlen=8000)
+        self.car_history = deque(st.get("car_history", []), maxlen=20000)
+        self.car_compacted = 0.0
         # tyre pressures per day: {date: {"fl": [sum, count], ...}}, for the Tyres chart (90 days)
         self.tyre_days = st.get("tyre_days") or self._tyres_from_history()
         self.vehicle_check = True       # one-off battery read when the car is awake (startup, plug in, charge end)
@@ -1450,7 +1451,9 @@ class Controller(object):
                 "%a %d %b", time.localtime(now + self.s.full_every * 86400)))
             self._save(now)
 
-    CAR_KEEP_S = 7 * 86400
+    CAR_KEEP_S = 90 * 86400       # car history is kept for 90 days:
+    CAR_FULL_S = 7 * 86400        # every reading for the last week, then
+    CAR_BUCKET_S = 1800           # one point per half hour for older readings
     # columns 1 to 8 of each car history point
     CAR_KEYS = ("soc", "cabin", "outside", "range_km", "tp_fl", "tp_fr", "tp_rl", "tp_rr")
 
@@ -1470,6 +1473,33 @@ class Controller(object):
         h.append([now] + vals)
         while h and now - h[0][0] > self.CAR_KEEP_S:
             h.popleft()
+        if now - self.car_compacted > 6 * 3600:
+            self._compact_car(now)
+
+    def _compact_car(self, now):
+        """Thins readings older than a week to one per half hour, keeping the latest value of each kind."""
+        self.car_compacted = now
+        cut = now - self.CAR_FULL_S
+        h = self.car_history
+        if not h or h[0][0] >= cut:
+            return
+        out, cur, key = [], None, None
+        for p in h:
+            if p[0] >= cut:
+                break
+            p = (list(p) + [None] * len(self.CAR_KEYS))[:1 + len(self.CAR_KEYS)]
+            b = int(p[0] // self.CAR_BUCKET_S)
+            if b != key:
+                if cur:
+                    out.append(cur)
+                cur, key = list(p), b
+            else:
+                cur = [p[0]] + [v if v is not None else o for v, o in zip(p[1:], cur[1:])]
+        if cur:
+            out.append(cur)
+        recent = [p for p in h if p[0] >= cut]
+        h.clear()
+        h.extend(out + recent)
 
     def _tyres_from_history(self):
         """Seeds the daily tyre averages from the car history (used once, after updating)."""
