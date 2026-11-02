@@ -125,6 +125,7 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
   .scene svg { -webkit-mask-image: none; mask-image: none; }
   .scene #s-homesub { display: none; }
   .scene .sub { font-size: 30px; fill: #d3d9e2; transform: translateY(20px); }
+  .scene #s-carrange { transform: translateY(28px); }
   .scene .lead { stroke-width: 3; }
   .scene .lbl { font-size: 36px; transform: translateY(-18px); }
   .scene .val { font-size: 62px; }
@@ -229,7 +230,7 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
 .charthead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .charthead h2 { margin: 0; }
-.legendrow { display: flex; gap: 14px; font-size: 13px; color: var(--text-2); }
+.legendrow { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); }
 .legendrow span { display: inline-flex; align-items: center; gap: 6px; }
 .range { margin-left: auto; display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; }
 .range button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-2);
@@ -253,6 +254,17 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tip .r { display: flex; align-items: center; gap: 7px; }
 .tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart.short { height: 220px; }
+.swatch.dashed { height: 2px; width: 14px; border-radius: 0; background: repeating-linear-gradient(90deg, var(--text-3) 0 4px, transparent 4px 7px) !important; }
+.carstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+.carstats[hidden] { display: none; }
+.cs { background: var(--surface-2); border-radius: 10px; padding: 9px 12px; }
+.cs .l { font-size: 12px; color: var(--text-2); }
+.cs .l span { color: var(--text-3); }
+.cs .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.cs .v small { font-size: 12px; color: var(--text-2); font-weight: 500; margin-left: 2px; }
+.cs .tyres { display: grid; grid-template-columns: auto auto; justify-content: start; column-gap: 14px; font-size: 15px; }
+.cs .tyres .low { color: var(--warn); }
+@media (max-width: 760px) { .carstats { grid-template-columns: 1fr 1fr; } }
 .exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
 .exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
 .exports a:hover { text-decoration: underline; }
@@ -304,7 +316,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 <circle class="dot" cx="858" cy="730" r="5"/>
 <line class="lead" x1="900" y1="1020" x2="900" y2="963"/>
 <circle class="dot" cx="900" cy="963" r="5"/>
-<g id="lab-car"><text class="lbl" x="266" y="66">Car</text><text class="val" x="266" y="112" id="s-car">&#160;</text><text class="sub" x="266" y="140" id="s-carsub"></text></g>
+<g id="lab-car"><text class="lbl" x="266" y="66">Car</text><text class="val" x="266" y="112" id="s-car">&#160;</text><text class="sub" x="266" y="140" id="s-carsub"></text><text class="sub" x="266" y="168" id="s-carrange"></text></g>
 <g id="lab-solar"><text class="lbl" x="656" y="66">Solar</text><text class="val" x="656" y="112" id="s-pv">&#160;</text></g>
 <g id="lab-home"><text class="lbl" x="874" y="66">Home</text><text class="val" x="874" y="112" id="s-house">&#160;</text><text class="sub" x="874" y="140" id="s-homesub">excluding the car</text></g>
 <g id="lab-grid"><text class="lbl" x="916" y="1056">Grid</text><text class="val" x="916" y="1102" id="s-grid">&#160;</text><text class="sub" x="916" y="1130" id="s-gridsub"></text></g>
@@ -389,6 +401,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       <div class="legendrow">
         <span><span class="swatch" style="background:var(--s-car)"></span>Battery <b id="cl-soc"></b></span>
         <span><span class="swatch" style="background:var(--s-cabin)"></span>Cabin <b id="cl-cabin"></b></span>
+        <span><span class="swatch dashed"></span>Outside <b id="cl-out"></b></span>
       </div>
       <div class="range" id="crange">
         <button type="button" data-h="24" class="on">24 h</button>
@@ -397,6 +410,12 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       </div>
     </div>
     <div class="chart short" id="cchart"><div class="tip" id="ctip"></div></div>
+    <div class="carstats" id="carstats" hidden>
+      <div class="cs"><div class="l">Range</div><div class="v" id="cs-range"></div></div>
+      <div class="cs"><div class="l">Odometer</div><div class="v" id="cs-odo"></div></div>
+      <div class="cs"><div class="l">Driven today</div><div class="v" id="cs-driven"></div></div>
+      <div class="cs"><div class="l">Tyres <span id="cs-tpt"></span></div><div class="v tyres" id="cs-tyres"></div></div>
+    </div>
     <div class="chartnote" id="cnote">The car only reports while it's awake, so gaps are normal while it sleeps.</div>
   </section>
 
@@ -408,7 +427,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="card">
       <h2>Daily totals</h2>
       <table>
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th></tr></thead>
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th><th>Driven km</th></tr></thead>
         <tbody id="days"></tbody>
       </table>
       <div class="exports" id="exports"></div>
@@ -503,6 +522,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     setText("s-carsub", !ch.configured ? "Charger not set up" : !ch.ok ? "No charger data"
       : !ch.plugged ? "Not plugged in" : ch.charging ? ch.amps.toFixed(0) + " A" + timeToLimit(s, veh, car)
       : (veh && veh.limit && soc !== null && soc >= veh.limit) ? "Charged to " + veh.limit + "% limit" : "Plugged in, not charging");
+    setText("s-carrange", veh && veh.range_km !== undefined && veh.range_km !== null ? veh.range_km + " km range" : "");
+    renderCarStats(veh);
     if (inv.ok) {
       setText("s-grid", svgkw(inv.grid));
       setText("s-gridsub", inv.grid < -30 ? "Exporting" : inv.grid > 30 ? "Importing" : "");
@@ -601,8 +622,12 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         var x = d[k], car = x.car_wh / 1000, share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
         var dt = new Date(k + "T12:00:00");
         var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
-      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
+        var km = x.odo_end !== undefined && x.odo_start !== undefined ? (x.odo_end - x.odo_start) : null;
+        if (k === keys[0]) drivenToday = km;
+        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) +
+          "</td><td>" + (km !== null ? km.toFixed(0) : "<span class='muted'>n/a</span>") + "</td></tr>";
+      }).join("") || "<tr><td colspan='6' class='muted'>No data yet</td></tr>";
+      if (state && state.tesla) renderCarStats(state.tesla.vehicle);
     }).catch(function () {});
   }
 
@@ -761,8 +786,31 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   var carHist = [], carHours = 24;
   var CSERIES = [
     { key: 1, name: "Battery", color: "--s-car", fmt: function (v) { return Math.round(v) + "%"; } },
-    { key: 2, name: "Cabin", color: "--s-cabin", fmt: function (v) { return v.toFixed(1) + "\u00b0C"; } }
+    { key: 2, name: "Cabin", color: "--s-cabin", fmt: function (v) { return v.toFixed(1) + "\u00b0C"; } },
+    { key: 3, name: "Outside", color: "--text-3", dash: true, fmt: function (v) { return v.toFixed(1) + "\u00b0C"; } }
   ];
+  var drivenToday = null;
+  function renderCarStats(veh) {
+    if (!veh) return;
+    var has = function (k) { return veh[k] !== undefined && veh[k] !== null; };
+    var tyres = ["tp_fl", "tp_fr", "tp_rl", "tp_rr"];
+    if (!has("range_km") && !has("odo_km") && !tyres.some(has)) return;
+    $("carstats").hidden = false;
+    $("cs-range").innerHTML = has("range_km") ? veh.range_km + "<small>km</small>" : "<span class='muted'>n/a</span>";
+    $("cs-odo").innerHTML = has("odo_km") ? Math.round(veh.odo_km).toLocaleString() + "<small>km</small>" : "<span class='muted'>n/a</span>";
+    $("cs-driven").innerHTML = drivenToday !== null ? drivenToday.toFixed(0) + "<small>km</small>" : "<span class='muted'>n/a</span>";
+    if (tyres.some(has)) {
+      var vals = tyres.map(function (k) { return has(k) ? veh[k] : null; });
+      var top = Math.max.apply(null, vals.filter(function (v) { return v !== null; }));
+      // flag a tyre that's under 36 psi or 4 psi below the others
+      $("cs-tyres").innerHTML = vals.map(function (v) {
+        if (v === null) return "<span class='muted'>n/a</span>";
+        return "<span" + (v < 36 || top - v >= 4 ? " class='low' title='Lower than the others'" : "") + ">" + Math.round(v) + "</span>";
+      }).join("");
+      $("cs-tpt").textContent = "psi" + (veh.tp_t ? ", " + (Date.now() / 1000 - veh.tp_t < 86400 ? hm(veh.tp_t)
+        : new Date(veh.tp_t * 1000).toLocaleDateString([], { day: "numeric", month: "short" })) : "");
+    } else $("cs-tyres").innerHTML = "<span class='muted'>n/a</span>";
+  }
   function pollCar() {
     fetch("/api/carhistory?hours=168", { cache: "no-store" }).then(function (r) { return r.json(); })
       .then(function (h) { carHist = h || []; drawCarChart(); }).catch(function () {});
@@ -783,10 +831,11 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     var box = $("cchart"), tip = $("ctip");
     var old = box.querySelector("svg"); if (old) old.remove();
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
-    var ls = lastOf(1), lc = lastOf(2);
+    var ls = lastOf(1), lc = lastOf(2), lo = lastOf(3);
+    $("cl-out").textContent = lo ? lo[3].toFixed(1) + "\u00b0C" : "";
     $("cl-soc").textContent = ls ? Math.round(ls[1]) + "%" : "";
     $("cl-cabin").textContent = lc ? lc[2].toFixed(1) + "\u00b0C" : "";
-    var latest = Math.max(ls ? ls[0] : 0, lc ? lc[0] : 0);
+    var latest = Math.max(ls ? ls[0] : 0, lc ? lc[0] : 0, lo ? lo[0] : 0);
     $("cnote").textContent = (latest ? "Last reading " + (Date.now() / 1000 - latest < 86400 ? hm(latest) : new Date(latest * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " " + hm(latest)) + ". " : "") +
       "The car only reports while it's awake, so gaps are normal while it sleeps.";
     var now = state ? state.time : Date.now() / 1000;
@@ -801,7 +850,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     var iw = W - ml - mr, ih = H - mt - mb;
     // cabin axis: round out to 5 degree steps, at least 20 degrees tall
     var tmin = Infinity, tmax = -Infinity;
-    pts.forEach(function (p) { if (p[2] !== null && p[2] !== undefined) { tmin = Math.min(tmin, p[2]); tmax = Math.max(tmax, p[2]); } });
+    pts.forEach(function (p) { [p[2], p[3]].forEach(function (v) { if (v !== null && v !== undefined) { tmin = Math.min(tmin, v); tmax = Math.max(tmax, v); } }); });
     if (tmin === Infinity) { tmin = 15; tmax = 35; }
     tmin = Math.floor(tmin / 5) * 5; tmax = Math.ceil(tmax / 5) * 5;
     if (tmax - tmin < 20) { var mid = (tmin + tmax) / 2; tmin = Math.floor((mid - 10) / 5) * 5; tmax = tmin + 20; }
@@ -844,7 +893,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         seg.push(sp[i]);
       }
       flush();
-      html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>" + dots;
+      html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")" + (s.dash ? ";stroke-dasharray:5 4;stroke-width:1.6" : "") + "'/>" + dots;
     });
     html += "<line class='cross' id='ccross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
     CSERIES.forEach(function (s, k) { html += "<circle class='dot' id='cdot" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });

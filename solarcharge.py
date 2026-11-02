@@ -42,6 +42,8 @@ from urllib.request import Request, urlopen
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VERSION = "1.0"
 MODES = ("manual", "solar", "minsolar", "fast")
+MILE_KM = 1.609344
+BAR_PSI = 14.5038
 
 log = logging.getLogger("solarcharge")
 
@@ -538,6 +540,7 @@ class BleTesla(object):
         soc = find(data, ("batteryLevel", "battery_level"))
         limit = find(data, ("chargeLimitSoc", "charge_limit_soc"))
         mins = find(data, ("minutesToFullCharge", "minutes_to_full_charge"))
+        rng = find(data, ("batteryRange", "battery_range"))
         res = {}
         try:
             if soc is not None:
@@ -546,6 +549,8 @@ class BleTesla(object):
                 res["limit"] = int(round(float(limit)))
             if mins is not None:
                 res["ttf_h"] = round(float(mins) / 60.0, 2)
+            if rng is not None and 0 <= float(rng) < 1000:
+                res["range_km"] = int(round(float(rng) * MILE_KM))
         except (TypeError, ValueError):
             pass
         return (res or None), ("" if res else "no charge data in reply")
@@ -645,7 +650,7 @@ class CarControl(object):
 
 class TeslemetryStream(object):
     """Listens to Teslemetry's free streaming feed (server sent events) for the car's
-    battery level, charge limit and cabin temperature. Costs no credits and never wakes the car; values
+    battery level, charge limit, temperatures, range, odometer and tyre pressures. Costs no credits and never wakes the car; values
     arrive whenever the car is awake and they change."""
 
     def __init__(self, s, on_update):
@@ -739,6 +744,27 @@ class TeslemetryStream(object):
             v = self._num(data["InsideTemp"])
             if v is not None and -40 < v < 90:
                 upd["cabin"] = round(v, 1)
+        if "OutsideTemp" in data:
+            v = self._num(data["OutsideTemp"])
+            if v is not None and -40 < v < 70:
+                upd["outside"] = round(v, 1)
+        # Tesla reports distances in miles and tyre pressures in bar
+        for key in ("RatedRange", "EstBatteryRange"):
+            if key in data and "range_km" not in upd:
+                v = self._num(data[key])
+                if v is not None and 0 <= v < 1000:
+                    upd["range_km"] = int(round(v * MILE_KM))
+        if "Odometer" in data:
+            v = self._num(data["Odometer"])
+            if v is not None and 0 <= v < 2000000:
+                upd["odo_km"] = round(v * MILE_KM, 1)
+        for key, name in (("TpmsPressureFl", "tp_fl"), ("TpmsPressureFr", "tp_fr"),
+                          ("TpmsPressureRl", "tp_rl"), ("TpmsPressureRr", "tp_rr")):
+            if key in data:
+                v = self._num(data[key])
+                if v is not None and 0.5 < v < 6:
+                    upd[name] = round(v * BAR_PSI, 1)
+                    upd["tp_t"] = time.time()
         if upd:
             self.on_update(upd)
 
@@ -841,11 +867,18 @@ class Storage(object):
         self.archive_dir = os.path.join(s.data_dir, "archive")
         os.makedirs(self.archive_dir, exist_ok=True)
 
-    MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c\n"
-    DAILY_HEADER = "date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands\n"
+    MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c,outside_c,range_km\n"
+    DAILY_HEADER = ("date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands,"
+                    "odometer_km,driven_km\n")
 
     def _append(self, path, header, lines):
         try:
+            if os.path.exists(path):
+                with open(path) as f:
+                    first = f.readline()
+                if first != header:
+                    # columns changed in an update: keep the old file and start a new one
+                    os.replace(path, path[:-4] + "-old.csv")
             new = not os.path.exists(path)
             with open(path, "a") as f:
                 if new:
@@ -1374,6 +1407,11 @@ class Controller(object):
         full = False
         with self.lock:
             v = dict(self.vehicle or {})
+            if upd.get("odo_km") is not None:
+                # distance driven today: from the last odometer reading before today, to the latest
+                if "odo_start" not in self.today:
+                    self.today["odo_start"] = v.get("odo_km") if v.get("odo_km") is not None else upd["odo_km"]
+                self.today["odo_end"] = upd["odo_km"]
             v.update(upd)
             v["t"] = time.time()
             self.vehicle = v
@@ -1387,21 +1425,22 @@ class Controller(object):
             self._save(now)
 
     CAR_KEEP_S = 7 * 86400
+    CAR_KEYS = ("soc", "cabin", "outside", "range_km")   # columns 1 to 4 of each car history point
 
     def _car_point(self, now, upd):
         """Adds battery level and cabin temperature to the car history (lock held)."""
-        soc, cabin = upd.get("soc"), upd.get("cabin")
-        if soc is None and cabin is None:
+        vals = [upd.get(k) for k in self.CAR_KEYS]
+        if all(v is None for v in vals):
             return
         h = self.car_history
-        if h and now - h[-1][0] < 120:
+        last = (list(h[-1]) + [None] * 5)[:1 + len(self.CAR_KEYS)] if h else None
+        if last and now - last[0] < 120:
             # merge updates that arrive close together into one point
-            last = h[-1]
-            h[-1] = [last[0], soc if soc is not None else last[1], cabin if cabin is not None else last[2]]
+            h[-1] = [last[0]] + [v if v is not None else o for v, o in zip(vals, last[1:])]
             return
-        if h and now - h[-1][0] < 600 and (soc is None or soc == h[-1][1]) and (cabin is None or cabin == h[-1][2]):
+        if last and now - last[0] < 600 and all(v is None or v == o for v, o in zip(vals, last[1:])):
             return   # nothing new; a point every 10 minutes is plenty while values are steady
-        h.append([now, soc, cabin])
+        h.append([now] + vals)
         while h and now - h[0][0] > self.CAR_KEEP_S:
             h.popleft()
 
@@ -1678,13 +1717,12 @@ class Controller(object):
             start = min(firsts) if firsts else yday
         by_min = {}
         for p in hist:
-            by_min[int(p[0] // 60)] = [p[1], p[2], p[4], p[3], p[5], "", ""]
+            by_min[int(p[0] // 60)] = [p[1], p[2], p[4], p[3], p[5], "", "", "", ""]
         for p in car:
-            row = by_min.setdefault(int(p[0] // 60), ["", "", "", "", "", "", ""])
-            if p[1] is not None:
-                row[5] = p[1]
-            if p[2] is not None:
-                row[6] = p[2]
+            row = by_min.setdefault(int(p[0] // 60), [""] * 9)
+            for i, v in enumerate(p[1:5]):
+                if v is not None:
+                    row[5 + i] = v
         d = start
         while d <= yday:
             key = d.isoformat()
@@ -1697,10 +1735,13 @@ class Controller(object):
             self.store.append_minutes(key, lines)
             t = days.get(key)
             if t:
-                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d\n" % (
+                odo = t.get("odo_end")
+                driven = (odo - t["odo_start"]) if odo is not None and t.get("odo_start") is not None else None
+                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s\n" % (
                     key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
                     t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
-                    t.get("starts", 0), t.get("stops", 0), t.get("commands", 0)))
+                    t.get("starts", 0), t.get("stops", 0), t.get("commands", 0),
+                    "%.1f" % odo if odo is not None else "", "%.1f" % driven if driven is not None else ""))
             d += timedelta(days=1)
         self.archived_through = yday.isoformat()
         self._save(now)
@@ -2033,7 +2074,12 @@ def main():
                 lt = time.localtime(clock())
                 hr = lt.tm_hour + lt.tm_min / 60.0
                 cabin = 21 + 17 * max(0.0, math.sin((hr - 8) / 12.0 * math.pi)) + random.uniform(-0.4, 0.4)
-                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1)})
+                outside = 17 + 11 * max(0.0, math.sin((hr - 7) / 13.0 * math.pi)) + random.uniform(-0.2, 0.2)
+                fake_stream.odo = getattr(fake_stream, "odo", 1234.0) + (random.uniform(0, 0.4) if 7 <= hr < 9 or 16 <= hr < 18 else 0)
+                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1),
+                                    "outside": round(outside, 1), "range_km": int(cs["soc"] * 4.3),
+                                    "odo_km": round(fake_stream.odo, 1), "tp_fl": 42.1, "tp_fr": 41.8,
+                                    "tp_rl": 41.9, "tp_rr": 37.2, "tp_t": time.time()})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True
