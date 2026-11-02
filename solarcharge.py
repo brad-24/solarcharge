@@ -1425,7 +1425,8 @@ class Controller(object):
             self._save(now)
 
     CAR_KEEP_S = 7 * 86400
-    CAR_KEYS = ("soc", "cabin", "outside", "range_km")   # columns 1 to 4 of each car history point
+    # columns 1 to 8 of each car history point
+    CAR_KEYS = ("soc", "cabin", "outside", "range_km", "tp_fl", "tp_fr", "tp_rl", "tp_rr")
 
     def _car_point(self, now, upd):
         """Adds battery level and cabin temperature to the car history (lock held)."""
@@ -1433,7 +1434,7 @@ class Controller(object):
         if all(v is None for v in vals):
             return
         h = self.car_history
-        last = (list(h[-1]) + [None] * 5)[:1 + len(self.CAR_KEYS)] if h else None
+        last = (list(h[-1]) + [None] * len(self.CAR_KEYS))[:1 + len(self.CAR_KEYS)] if h else None
         if last and now - last[0] < 120:
             # merge updates that arrive close together into one point
             h[-1] = [last[0]] + [v if v is not None else o for v, o in zip(vals, last[1:])]
@@ -2075,11 +2076,13 @@ def main():
                 hr = lt.tm_hour + lt.tm_min / 60.0
                 cabin = 21 + 17 * max(0.0, math.sin((hr - 8) / 12.0 * math.pi)) + random.uniform(-0.4, 0.4)
                 outside = 17 + 11 * max(0.0, math.sin((hr - 7) / 13.0 * math.pi)) + random.uniform(-0.2, 0.2)
+                warm = (outside - 17) * 0.12   # tyre pressure rises a little as it warms up
                 fake_stream.odo = getattr(fake_stream, "odo", 1234.0) + (random.uniform(0, 0.4) if 7 <= hr < 9 or 16 <= hr < 18 else 0)
                 ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1),
                                     "outside": round(outside, 1), "range_km": int(cs["soc"] * 4.3),
-                                    "odo_km": round(fake_stream.odo, 1), "tp_fl": 42.1, "tp_fr": 41.8,
-                                    "tp_rl": 41.9, "tp_rr": 37.2, "tp_t": time.time()})
+                                    "odo_km": round(fake_stream.odo, 1), "tp_fl": round(41.2 + warm, 1),
+                                    "tp_fr": round(40.9 + warm, 1), "tp_rl": round(41.0 + warm, 1),
+                                    "tp_rr": round(38.6 + warm - 0.02 * (hr - 9), 1), "tp_t": time.time()})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True
