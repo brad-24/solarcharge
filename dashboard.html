@@ -253,6 +253,9 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tip .r { display: flex; align-items: center; gap: 7px; }
 .tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart.short { height: 220px; }
+.exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
+.exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
+.exports a:hover { text-decoration: underline; }
 .legendrow b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .chartnote { font-size: 12px; color: var(--text-3); margin-top: 6px; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -408,6 +411,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th></tr></thead>
         <tbody id="days"></tbody>
       </table>
+      <div class="exports" id="exports"></div>
     </div>
   </section>
   <footer id="footer"></footer>
@@ -574,6 +578,21 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   function pollHistory() {
     fetch("/api/history?minutes=4320", { cache: "no-store" }).then(function (r) { return r.json(); })
       .then(function (h) { history = h || []; drawChart(); }).catch(function () {});
+  }
+  function pollExports() {
+    fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
+      var daily = files.indexOf("daily.csv") >= 0;
+      var months = files.filter(function (f) { return /^minutes-\d{4}-\d{2}\.csv$/.test(f); });
+      if (!daily && !months.length) {
+        $("exports").textContent = "Downloads appear here after the first full day is archived (just after midnight).";
+        return;
+      }
+      $("exports").innerHTML = "Download: " + (daily ? "<a href='/export/daily.csv' download>Daily totals (CSV)</a>" : "") +
+        (months.length ? "<br>Minute data: " + months.map(function (f) {
+          var ym = f.slice(8, 15), dt = new Date(ym + "-15T12:00:00");
+          return "<a href='/export/" + f + "' download>" + dt.toLocaleDateString([], { month: "short", year: "numeric" }) + "</a>";
+        }).join("") : "");
+    }).catch(function () {});
   }
   function pollDays() {
     fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
@@ -932,7 +951,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
   }
 
-  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar();
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar(); pollExports();
+  setInterval(pollExports, 3600000);
   setInterval(pollCar, 60000);
   setInterval(pollSchedule, 120000);
   setInterval(poll, 5000);

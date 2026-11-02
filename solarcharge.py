@@ -32,7 +32,7 @@ import sys
 import threading
 import time
 from collections import deque
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from logging.handlers import RotatingFileHandler
 from urllib.error import HTTPError, URLError
@@ -838,6 +838,42 @@ class Storage(object):
         self.state_path = os.path.join(s.data_dir, "state.json")
         self.sessions_path = os.path.join(s.data_dir, "sessions.json")
         self.events_path = os.path.join(s.data_dir, "events.log")
+        self.archive_dir = os.path.join(s.data_dir, "archive")
+        os.makedirs(self.archive_dir, exist_ok=True)
+
+    MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c\n"
+    DAILY_HEADER = "date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands\n"
+
+    def _append(self, path, header, lines):
+        try:
+            new = not os.path.exists(path)
+            with open(path, "a") as f:
+                if new:
+                    f.write(header)
+                f.write("".join(lines))
+        except IOError as e:
+            log.warning("could not write %s: %s", path, e)
+
+    def append_minutes(self, day, lines):
+        """One CSV per month of minute by minute data, kept forever (about 60 KB a day)."""
+        if lines:
+            self._append(os.path.join(self.archive_dir, "minutes-%s.csv" % day[:7]), self.MINUTES_HEADER, lines)
+
+    def append_daily(self, line):
+        self._append(os.path.join(self.archive_dir, "daily.csv"), self.DAILY_HEADER, [line])
+
+    def archive_files(self):
+        try:
+            names = os.listdir(self.archive_dir)
+        except OSError:
+            return []
+        return sorted((n for n in names if n.endswith(".csv")), reverse=True)
+
+    def read_archive(self, name):
+        if name not in self.archive_files():
+            return None
+        with open(os.path.join(self.archive_dir, name), "rb") as f:
+            return f.read()
 
     def append_reading(self, row):
         path = self.readings_path
@@ -968,6 +1004,7 @@ class Controller(object):
         self.last_full = st.get("last_full")
         self.forecast = None
         self.session = st.get("session")
+        self.archived_through = st.get("archived_through")   # last day written to the archive
 
     # ---- public, called from web thread
 
@@ -1085,6 +1122,8 @@ class Controller(object):
                 self._save(now)
 
         self._roll_day(now)
+        if self.store and self.archived_through != (datetime.fromtimestamp(now).date() - timedelta(days=1)).isoformat():
+            self._archive_pending(now)
 
         # read inverter
         try:
@@ -1620,6 +1659,52 @@ class Controller(object):
             self.today_key = key
             self.today = self._blank_today()
 
+    def _archive_pending(self, now):
+        """Writes every finished day not yet archived: minute data and the daily totals."""
+        yday = datetime.fromtimestamp(now).date() - timedelta(days=1)
+        with self.lock:
+            hist = list(self.history)
+            car = list(self.car_history)
+            days = dict(self.days)
+        if self.archived_through:
+            try:
+                start = date(*map(int, self.archived_through.split("-"))) + timedelta(days=1)
+            except ValueError:
+                start = yday
+        else:
+            # first run: archive whatever history is still held
+            firsts = [datetime.fromtimestamp(p[0]).date() for p in hist[:1] + car[:1]]
+            firsts += [date(*map(int, k.split("-"))) for k in sorted(days)[:1]]
+            start = min(firsts) if firsts else yday
+        by_min = {}
+        for p in hist:
+            by_min[int(p[0] // 60)] = [p[1], p[2], p[4], p[3], p[5], "", ""]
+        for p in car:
+            row = by_min.setdefault(int(p[0] // 60), ["", "", "", "", "", "", ""])
+            if p[1] is not None:
+                row[5] = p[1]
+            if p[2] is not None:
+                row[6] = p[2]
+        d = start
+        while d <= yday:
+            key = d.isoformat()
+            lines = []
+            for m in sorted(by_min):
+                t = m * 60
+                if datetime.fromtimestamp(t).date() == d:
+                    lines.append(time.strftime("%Y-%m-%d %H:%M", time.localtime(t)) + "," +
+                                 ",".join(str(v) for v in by_min[m]) + "\n")
+            self.store.append_minutes(key, lines)
+            t = days.get(key)
+            if t:
+                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d\n" % (
+                    key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
+                    t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
+                    t.get("starts", 0), t.get("stops", 0), t.get("commands", 0)))
+            d += timedelta(days=1)
+        self.archived_through = yday.isoformat()
+        self._save(now)
+
     def _save(self, now):
         self.last_save = now
         if not self.store:
@@ -1634,6 +1719,7 @@ class Controller(object):
             "last_full": self.last_full,
             "vehicle": self.vehicle,
             "car_history": list(self.car_history),
+            "archived_through": self.archived_through,
             "saved": now,
         })
 
@@ -1771,6 +1857,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(c.get_car_history(hours))
         elif u.path == "/api/sessions":
             self._json(c.get_sessions())
+        elif u.path == "/api/export":
+            self._json(c.store.archive_files() if c.store else [])
+        elif u.path.startswith("/export/"):
+            name = u.path[len("/export/"):]
+            body = c.store.read_archive(name) if c.store else None
+            if body is None:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="solarcharge-%s"' % name)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif u.path == "/sessions":
             self._page("sessions.html")
         elif u.path == "/api/schedule":

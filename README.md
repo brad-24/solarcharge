@@ -13,6 +13,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too
 * **Car chart** of battery level and cabin temperature over the last day, 3 days or week, from Teslemetry's free data stream
+* **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
 * **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, cost and money saved, with a CSV download
 * **Full charge tracker** for LFP batteries, which should reach 100% about once a week. It shows when the last one happened and suggests the sunniest day for the next, using a free solar forecast from Open Meteo
 * **Easy on the SD card:** routine readings live in RAM, only events and summaries are saved to disk
@@ -167,6 +168,7 @@ The dashboard has **no login** and can start and stop charging. **Never** open p
 | `dashboard.html`, `sessions.html` | the web pages |
 | `config.ini` | your settings (not in the repository; copy from `config.example.ini`) |
 | `data/` | events log, saved history and sessions (SD card, a few small writes a day) |
+| `data/archive/` | permanent archive: daily totals and minute by minute data, one CSV per month, written just after midnight (about 20 MB a year). Download from the dashboard under Daily totals |
 | `/dev/shm/solarcharge/` | every reading (RAM only, cleared on reboot) |
 
 Keep `config.ini`, `data/`, `~/.solarcharge_token` and `~/.solarcharge_ble_key.pem` private.
