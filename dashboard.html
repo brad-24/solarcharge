@@ -22,6 +22,7 @@
   --s-house: #2a78d6;
   --s-solar: #eb6834;
   --s-car: #1baf7a;
+  --s-cabin: #7a4fd4;
   --good: #0ca30c;
   --warn: #b77800;
   --crit: #d03b3b;
@@ -43,6 +44,7 @@
     --s-house: #3987e5;
     --s-solar: #d95926;
     --s-car: #199e70;
+    --s-cabin: #a17ff0;
     --good: #2fbf2f;
     --warn: #fab219;
     --crit: #e66767;
@@ -63,6 +65,7 @@
   --s-house: #3987e5;
   --s-solar: #d95926;
   --s-car: #199e70;
+  --s-cabin: #a17ff0;
   --good: #2fbf2f;
   --warn: #fab219;
   --crit: #e66767;
@@ -249,6 +252,9 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tip .t { color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
 .tip .r { display: flex; align-items: center; gap: 7px; }
 .tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart.short { height: 220px; }
+.legendrow b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.chartnote { font-size: 12px; color: var(--text-3); margin-top: 6px; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: var(--text-3); font-size: 14px; }
 
@@ -372,6 +378,23 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       </div>
     </div>
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="charthead">
+      <h2>Car</h2>
+      <div class="legendrow">
+        <span><span class="swatch" style="background:var(--s-car)"></span>Battery <b id="cl-soc"></b></span>
+        <span><span class="swatch" style="background:var(--s-cabin)"></span>Cabin <b id="cl-cabin"></b></span>
+      </div>
+      <div class="range" id="crange">
+        <button type="button" data-h="24" class="on">24 h</button>
+        <button type="button" data-h="72">3 d</button>
+        <button type="button" data-h="168">7 d</button>
+      </div>
+    </div>
+    <div class="chart short" id="cchart"><div class="tip" id="ctip"></div></div>
+    <div class="chartnote" id="cnote">The car only reports while it's awake, so gaps are normal while it sleeps.</div>
   </section>
 
   <section class="grid bottom">
@@ -713,7 +736,143 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     hit.addEventListener("mouseleave", leave);
     hit.addEventListener("touchend", leave);
   }
-  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(drawChart, 150); });
+  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { drawChart(); drawCarChart(); }, 150); });
+
+  // ---- car chart: battery % (left axis) and cabin temperature (right axis)
+  var carHist = [], carHours = 24;
+  var CSERIES = [
+    { key: 1, name: "Battery", color: "--s-car", fmt: function (v) { return Math.round(v) + "%"; } },
+    { key: 2, name: "Cabin", color: "--s-cabin", fmt: function (v) { return v.toFixed(1) + "\u00b0C"; } }
+  ];
+  function pollCar() {
+    fetch("/api/carhistory?hours=168", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (h) { carHist = h || []; drawCarChart(); }).catch(function () {});
+  }
+  $("crange").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    carHours = parseInt(b.getAttribute("data-h"), 10);
+    var all = $("crange").querySelectorAll("button");
+    for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
+    drawCarChart();
+  });
+  function lastOf(key) {
+    for (var i = carHist.length - 1; i >= 0; i--) if (carHist[i][key] !== null && carHist[i][key] !== undefined) return carHist[i];
+    return null;
+  }
+  function drawCarChart() {
+    var box = $("cchart"), tip = $("ctip");
+    var old = box.querySelector("svg"); if (old) old.remove();
+    var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
+    var ls = lastOf(1), lc = lastOf(2);
+    $("cl-soc").textContent = ls ? Math.round(ls[1]) + "%" : "";
+    $("cl-cabin").textContent = lc ? lc[2].toFixed(1) + "\u00b0C" : "";
+    var latest = Math.max(ls ? ls[0] : 0, lc ? lc[0] : 0);
+    $("cnote").textContent = (latest ? "Last reading " + (Date.now() / 1000 - latest < 86400 ? hm(latest) : new Date(latest * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " " + hm(latest)) + ". " : "") +
+      "The car only reports while it's awake, so gaps are normal while it sleeps.";
+    var now = state ? state.time : Date.now() / 1000;
+    var from = now - carHours * 3600;
+    var pts = carHist.filter(function (p) { return p[0] >= from; });
+    if (!pts.length) {
+      var e = document.createElement("div"); e.className = "empty";
+      e.textContent = carHist.length ? "No car readings in this period" : "Fills in as the car reports its battery level and cabin temperature";
+      box.appendChild(e); return;
+    }
+    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 50, mt = 10, mb = 26;
+    var iw = W - ml - mr, ih = H - mt - mb;
+    // cabin axis: round out to 5 degree steps, at least 20 degrees tall
+    var tmin = Infinity, tmax = -Infinity;
+    pts.forEach(function (p) { if (p[2] !== null && p[2] !== undefined) { tmin = Math.min(tmin, p[2]); tmax = Math.max(tmax, p[2]); } });
+    if (tmin === Infinity) { tmin = 15; tmax = 35; }
+    tmin = Math.floor(tmin / 5) * 5; tmax = Math.ceil(tmax / 5) * 5;
+    if (tmax - tmin < 20) { var mid = (tmin + tmax) / 2; tmin = Math.floor((mid - 10) / 5) * 5; tmax = tmin + 20; }
+    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
+    var yS = function (v) { return mt + ih - v / 100 * ih; };
+    var yT = function (v) { return mt + ih - (v - tmin) / (tmax - tmin) * ih; };
+    var yOf = function (s, v) { return s.key === 1 ? yS(v) : yT(v); };
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Car battery level and cabin temperature over the last " + carHours + " hours");
+    var html = "<g class='axis'>";
+    for (var i = 0; i <= 4; i++) {
+      var yy = mt + ih - ih * i / 4;
+      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
+      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + (25 * i) + "%</text>";
+      html += "<text x='" + (W - mr + 8) + "' y='" + (yy + 4) + "'>" + Math.round(tmin + (tmax - tmin) * i / 4) + "\u00b0</text>";
+    }
+    var span = now - from, stepH = span <= 86400 ? 3 : span <= 3 * 86400 ? 12 : 24;
+    if (iw < 420) stepH *= 2;
+    var step = stepH * 3600, tz = new Date().getTimezoneOffset() * 60;
+    for (var t = Math.ceil((from - tz) / step) * step + tz; t <= now; t += step) {
+      var d = new Date(t * 1000);
+      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
+      html += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
+    }
+    html += "</g>";
+    var gap = 1800;   // more than 30 minutes without a reading: the car was asleep, so break the line
+    CSERIES.forEach(function (s) {
+      var sp = pts.filter(function (p) { return p[s.key] !== null && p[s.key] !== undefined; });
+      var d = "", seg = [], dots = "";
+      var flush = function () {
+        if (seg.length === 1) dots += "<circle r='2.5' cx='" + x(seg[0][0]).toFixed(1) + "' cy='" + yOf(s, seg[0][s.key]).toFixed(1) + "' style='fill:var(" + s.color + ")'/>";
+        else if (seg.length > 1) d += "M" + seg.map(function (q) { return x(q[0]).toFixed(1) + "," + yOf(s, q[s.key]).toFixed(1); }).join("L");
+        seg = [];
+      };
+      for (var i = 0; i < sp.length; i++) {
+        if (i > 0 && sp[i][0] - sp[i - 1][0] > gap) flush();
+        seg.push(sp[i]);
+      }
+      flush();
+      html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>" + dots;
+    });
+    html += "<line class='cross' id='ccross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
+    CSERIES.forEach(function (s, k) { html += "<circle class='dot' id='cdot" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
+    html += "<rect id='chit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
+    svg.innerHTML = html;
+    box.insertBefore(svg, tip);
+
+    var hit = svg.querySelector("#chit"), cross = svg.querySelector("#ccross");
+    function nearest(key, t) {
+      var best = null, bd = Infinity;
+      for (var i = 0; i < pts.length; i++) {
+        if (pts[i][key] === null || pts[i][key] === undefined) continue;
+        var dd = Math.abs(pts[i][0] - t); if (dd < bd) { bd = dd; best = pts[i]; }
+      }
+      return bd <= gap ? best : null;
+    }
+    function move(ev) {
+      var r = svg.getBoundingClientRect();
+      var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      var t = from + (cx - ml) / iw * (now - from);
+      var rows = "", anyT = null;
+      CSERIES.forEach(function (s, k) {
+        var p = nearest(s.key, t), c = svg.querySelector("#cdot" + k);
+        if (p) {
+          if (anyT === null) anyT = p[0];
+          c.setAttribute("cx", x(p[0])); c.setAttribute("cy", yOf(s, p[s.key])); c.style.display = "";
+          rows += "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + s.fmt(p[s.key]) + "</b></div>";
+        } else c.style.display = "none";
+      });
+      if (anyT === null) { leave(); return; }
+      var px = x(anyT);
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
+      tip.innerHTML = "<div class='t'>" + (carHours > 24 ? new Date(anyT * 1000).toLocaleDateString([], { weekday: "short" }) + " " : "") + hm(anyT) + "</div>" + rows;
+      tip.style.display = "block";
+      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
+      tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
+    }
+    function leave() {
+      tip.style.display = "none"; cross.style.display = "none";
+      CSERIES.forEach(function (s, k) { svg.querySelector("#cdot" + k).style.display = "none"; });
+    }
+    hit.addEventListener("mousemove", move);
+    hit.addEventListener("touchstart", move, { passive: true });
+    hit.addEventListener("touchmove", move, { passive: true });
+    hit.addEventListener("mouseleave", leave);
+    hit.addEventListener("touchend", leave);
+  }
 
 
   // ---- full charge schedule
@@ -773,7 +932,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
   }
 
-  poll(); pollHistory(); pollDays(); pollSchedule();
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar();
+  setInterval(pollCar, 60000);
   setInterval(pollSchedule, 120000);
   setInterval(poll, 5000);
   setInterval(pollHistory, 60000);

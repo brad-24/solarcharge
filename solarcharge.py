@@ -645,7 +645,7 @@ class CarControl(object):
 
 class TeslemetryStream(object):
     """Listens to Teslemetry's free streaming feed (server sent events) for the car's
-    battery level and charge limit. Costs no credits and never wakes the car; values
+    battery level, charge limit and cabin temperature. Costs no credits and never wakes the car; values
     arrive whenever the car is awake and they change."""
 
     def __init__(self, s, on_update):
@@ -735,6 +735,10 @@ class TeslemetryStream(object):
             v = self._num(data["ChargeLimitSoc"])
             if v is not None and 0 < v <= 100:
                 upd["limit"] = int(round(v))
+        if "InsideTemp" in data:
+            v = self._num(data["InsideTemp"])
+            if v is not None and -40 < v < 90:
+                upd["cabin"] = round(v, 1)
         if upd:
             self.on_update(upd)
 
@@ -954,6 +958,8 @@ class Controller(object):
         self.minute_acc = None
         self.last_save = clock()
         self.vehicle = st.get("vehicle")
+        # car telemetry for the Car chart: [time, battery %, cabin C], recorded as values arrive
+        self.car_history = deque(st.get("car_history", []), maxlen=8000)
         self.vehicle_check = True       # one-off battery read when the car is awake (startup, plug in, charge end)
         self.vehicle_check_next = 0.0
         self.vehicle_next = 0.0
@@ -1332,6 +1338,7 @@ class Controller(object):
             v.update(upd)
             v["t"] = time.time()
             self.vehicle = v
+            self._car_point(now, upd)
             if v.get("soc") is not None and v["soc"] >= 100 and (not self.last_full or now - self.last_full > 12 * 3600):
                 self.last_full = now
                 full = True
@@ -1339,6 +1346,33 @@ class Controller(object):
             self.event("Battery reached 100%%. Next full charge due %s" % time.strftime(
                 "%a %d %b", time.localtime(now + self.s.full_every * 86400)))
             self._save(now)
+
+    CAR_KEEP_S = 7 * 86400
+
+    def _car_point(self, now, upd):
+        """Adds battery level and cabin temperature to the car history (lock held)."""
+        soc, cabin = upd.get("soc"), upd.get("cabin")
+        if soc is None and cabin is None:
+            return
+        h = self.car_history
+        if h and now - h[-1][0] < 120:
+            # merge updates that arrive close together into one point
+            last = h[-1]
+            h[-1] = [last[0], soc if soc is not None else last[1], cabin if cabin is not None else last[2]]
+            return
+        if h and now - h[-1][0] < 600 and (soc is None or soc == h[-1][1]) and (cabin is None or cabin == h[-1][2]):
+            return   # nothing new; a point every 10 minutes is plenty while values are steady
+        h.append([now, soc, cabin])
+        while h and now - h[0][0] > self.CAR_KEEP_S:
+            h.popleft()
+
+    def get_car_history(self, hours):
+        with self.lock:
+            h = list(self.car_history)
+        if hours > 0:
+            cut = self.clock() - hours * 3600
+            h = [p for p in h if p[0] >= cut]
+        return h
 
     def mark_full(self):
         now = self.clock()
@@ -1599,6 +1633,7 @@ class Controller(object):
             "session": self.session,
             "last_full": self.last_full,
             "vehicle": self.vehicle,
+            "car_history": list(self.car_history),
             "saved": now,
         })
 
@@ -1727,6 +1762,13 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 minutes = 1440
             self._json(c.get_history(minutes))
+        elif u.path == "/api/carhistory":
+            q = parse_qs(u.query)
+            try:
+                hours = int(q.get("hours", ["168"])[0])
+            except ValueError:
+                hours = 168
+            self._json(c.get_car_history(hours))
         elif u.path == "/api/sessions":
             self._json(c.get_sessions())
         elif u.path == "/sessions":
@@ -1887,7 +1929,10 @@ def main():
         def fake_stream():
             while True:
                 cs, _ = tesla.charge_state()
-                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"]})
+                lt = time.localtime(clock())
+                hr = lt.tm_hour + lt.tm_min / 60.0
+                cabin = 21 + 17 * max(0.0, math.sin((hr - 8) / 12.0 * math.pi)) + random.uniform(-0.4, 0.4)
+                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1)})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True

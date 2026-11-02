@@ -12,6 +12,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Teslemetry if Bluetooth is busy or fails
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too
+* **Car chart** of battery level and cabin temperature over the last day, 3 days or week, from Teslemetry's free data stream
 * **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, cost and money saved, with a CSV download
 * **Full charge tracker** for LFP batteries, which should reach 100% about once a week. It shows when the last one happened and suggests the sunniest day for the next, using a free solar forecast from Open Meteo
 * **Easy on the SD card:** routine readings live in RAM, only events and summaries are saved to disk
@@ -98,6 +99,8 @@ chmod 600 ~/.solarcharge_token
 ```
 
 Teslemetry also needs its virtual key added to the car. Follow the prompts in their console. Each command costs Teslemetry credits, so Bluetooth stays the main route.
+
+For live battery level, charge limit and cabin temperature on the dashboard, turn on these fields in the Teslemetry console under Telemetry Configuration: BatteryLevel, ChargeLimitSoc, TimeToFullCharge and InsideTemp. The data stream is free and never wakes the car.
 
 ## Run it as a service
 
