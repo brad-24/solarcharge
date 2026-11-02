@@ -101,7 +101,7 @@ chmod 600 ~/.solarcharge_token
 
 Teslemetry also needs its virtual key added to the car. Follow the prompts in their console. Each command costs Teslemetry credits, so Bluetooth stays the main route.
 
-For live battery level, charge limit and cabin temperature on the dashboard, turn on these fields in the Teslemetry console under Telemetry Configuration: BatteryLevel, ChargeLimitSoc and TimeToFullCharge, plus any of these for the Car chart and stats: InsideTemp, OutsideTemp, RatedRange, Odometer, TpmsPressureFl, TpmsPressureFr, TpmsPressureRl and TpmsPressureRr. The stream never wakes the car or uses command credits, but fields not marked Free in the console may need a higher Teslemetry plan.
+For live battery level, charge limit and cabin temperature on the dashboard, turn on these fields in the Teslemetry console under Telemetry Configuration: BatteryLevel, ChargeLimitSoc and TimeToFullCharge, plus any of these for the Car chart and stats: InsideTemp, OutsideTemp, RatedRange, Odometer, VehicleSpeed (for each day's top speed), TpmsPressureFl, TpmsPressureFr, TpmsPressureRl and TpmsPressureRr. The stream never wakes the car or uses command credits, but fields not marked Free in the console may need a higher Teslemetry plan.
 
 ## Run it as a service
 

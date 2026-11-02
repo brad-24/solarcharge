@@ -274,6 +274,7 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .cs .l span { color: var(--text-3); }
 .cs .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .cs .v small { font-size: 12px; color: var(--text-2); font-weight: 500; margin-left: 2px; }
+.cs .v .sub2 { font-size: 12px; font-weight: 500; color: var(--text-2); margin-top: 1px; }
 .cs .tyres { display: grid; grid-template-columns: auto auto; justify-content: start; column-gap: 18px; font-size: 15px; }
 .cs .tyres .low { color: var(--warn); }
 .cs .tyres .pos { font-size: 11px; font-weight: 600; color: var(--text-3); margin: 0 5px 0 0; }
@@ -459,7 +460,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="card">
       <h2>Daily totals</h2>
       <table>
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th><th>Driven km</th></tr></thead>
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th><th>Driven km</th><th>Top km/h</th></tr></thead>
         <tbody id="days"></tbody>
       </table>
       <div class="exports" id="exports"></div>
@@ -655,10 +656,11 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         var dt = new Date(k + "T12:00:00");
         var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
         var km = x.odo_end !== undefined && x.odo_start !== undefined ? (x.odo_end - x.odo_start) : null;
-        if (k === keys[0]) drivenToday = km;
+        if (k === keys[0]) { drivenToday = km; topToday = x.top_kmh || null; }
         return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) +
-          "</td><td>" + (km !== null ? km.toFixed(0) : "<span class='muted'>n/a</span>") + "</td></tr>";
-      }).join("") || "<tr><td colspan='6' class='muted'>No data yet</td></tr>";
+          "</td><td>" + (km !== null ? km.toFixed(0) : "<span class='muted'>n/a</span>") +
+          "</td><td>" + (x.top_kmh ? x.top_kmh : "<span class='muted'>n/a</span>") + "</td></tr>";
+      }).join("") || "<tr><td colspan='7' class='muted'>No data yet</td></tr>";
       if (state && state.tesla) renderCarStats(state.tesla.vehicle);
     }).catch(function () {});
   }
@@ -816,7 +818,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 
   // ---- car telemetry charts (TEMPS and CAR), drawn from the same history
   // history points: [time, battery %, cabin C, outside C, range km, FL, FR, RL, RR psi]
-  var carHist = [], carHours = 24, drivenToday = null;
+  var carHist = [], carHours = 24, drivenToday = null, topToday = null;
   var GAP = 1800;   // more than 30 minutes without a reading: the car was asleep, so break the line
   var deg = function (v) { return v.toFixed(1) + "°C"; };
   var psi = function (v) { return v.toFixed(1) + " psi"; };
@@ -999,7 +1001,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     $("carstats").hidden = false;
     $("cs-range").innerHTML = has("range_km") ? veh.range_km + "<small>km</small>" : "<span class='muted'>n/a</span>";
     $("cs-odo").innerHTML = has("odo_km") ? Math.round(veh.odo_km).toLocaleString() + "<small>km</small>" : "<span class='muted'>n/a</span>";
-    $("cs-driven").innerHTML = drivenToday !== null ? drivenToday.toFixed(0) + "<small>km</small>" : "<span class='muted'>n/a</span>";
+    $("cs-driven").innerHTML = (drivenToday !== null ? drivenToday.toFixed(0) + "<small>km</small>" : "<span class='muted'>n/a</span>") +
+      (topToday ? "<div class='sub2'>top speed " + topToday + " km/h</div>" : "");
     if (tyres.some(has)) {
       var vals = tyres.map(function (k) { return has(k) ? veh[k] : null; });
       var top = Math.max.apply(null, vals.filter(function (v) { return v !== null; }));

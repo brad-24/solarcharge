@@ -754,6 +754,10 @@ class TeslemetryStream(object):
                 v = self._num(data[key])
                 if v is not None and 0 <= v < 1000:
                     upd["range_km"] = int(round(v * MILE_KM))
+        if "VehicleSpeed" in data:
+            v = self._num(data["VehicleSpeed"])
+            if v is not None and 0 <= v < 200:
+                upd["speed_kmh"] = int(round(v * MILE_KM))
         if "Odometer" in data:
             v = self._num(data["Odometer"])
             if v is not None and 0 <= v < 2000000:
@@ -869,7 +873,7 @@ class Storage(object):
 
     MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c,outside_c,range_km\n"
     DAILY_HEADER = ("date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands,"
-                    "odometer_km,driven_km\n")
+                    "odometer_km,driven_km,top_kmh\n")
 
     def _append(self, path, header, lines):
         try:
@@ -877,8 +881,18 @@ class Storage(object):
                 with open(path) as f:
                     first = f.readline()
                 if first != header:
-                    # columns changed in an update: keep the old file and start a new one
-                    os.replace(path, path[:-4] + "-old.csv")
+                    old_cols, new_cols = first.strip().split(","), header.strip().split(",")
+                    if new_cols[:len(old_cols)] == old_cols:
+                        # columns were added in an update: pad the existing rows to match
+                        with open(path) as f:
+                            rows = f.read().splitlines()[1:]
+                        pad = "," * (len(new_cols) - len(old_cols))
+                        with open(path + ".tmp", "w") as f:
+                            f.write(header + "".join(r + pad + "\n" for r in rows if r))
+                        os.replace(path + ".tmp", path)
+                    else:
+                        # columns changed: keep the old file and start a new one
+                        os.replace(path, path[:-4] + "-old.csv")
             new = not os.path.exists(path)
             with open(path, "a") as f:
                 if new:
@@ -1412,6 +1426,8 @@ class Controller(object):
                 if "odo_start" not in self.today:
                     self.today["odo_start"] = v.get("odo_km") if v.get("odo_km") is not None else upd["odo_km"]
                 self.today["odo_end"] = upd["odo_km"]
+            if upd.get("speed_kmh"):
+                self.today["top_kmh"] = max(self.today.get("top_kmh", 0), upd["speed_kmh"])
             v.update(upd)
             v["t"] = time.time()
             self.vehicle = v
@@ -1738,11 +1754,12 @@ class Controller(object):
             if t:
                 odo = t.get("odo_end")
                 driven = (odo - t["odo_start"]) if odo is not None and t.get("odo_start") is not None else None
-                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s\n" % (
+                self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s,%s\n" % (
                     key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
                     t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
                     t.get("starts", 0), t.get("stops", 0), t.get("commands", 0),
-                    "%.1f" % odo if odo is not None else "", "%.1f" % driven if driven is not None else ""))
+                    "%.1f" % odo if odo is not None else "", "%.1f" % driven if driven is not None else "",
+                    t.get("top_kmh", "")))
             d += timedelta(days=1)
         self.archived_through = yday.isoformat()
         self._save(now)
@@ -2077,12 +2094,14 @@ def main():
                 cabin = 21 + 17 * max(0.0, math.sin((hr - 8) / 12.0 * math.pi)) + random.uniform(-0.4, 0.4)
                 outside = 17 + 11 * max(0.0, math.sin((hr - 7) / 13.0 * math.pi)) + random.uniform(-0.2, 0.2)
                 warm = (outside - 17) * 0.12   # tyre pressure rises a little as it warms up
-                fake_stream.odo = getattr(fake_stream, "odo", 1234.0) + (random.uniform(0, 0.4) if 7 <= hr < 9 or 16 <= hr < 18 else 0)
+                driving = 7 <= hr < 9 or 16 <= hr < 18
+                fake_stream.odo = getattr(fake_stream, "odo", 1234.0) + (random.uniform(0, 0.4) if driving else 0)
                 ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1),
                                     "outside": round(outside, 1), "range_km": int(cs["soc"] * 4.3),
                                     "odo_km": round(fake_stream.odo, 1), "tp_fl": round(41.2 + warm, 1),
                                     "tp_fr": round(40.9 + warm, 1), "tp_rl": round(41.0 + warm, 1),
-                                    "tp_rr": round(38.6 + warm - 0.02 * (hr - 9), 1), "tp_t": time.time()})
+                                    "tp_rr": round(38.6 + warm - 0.02 * (hr - 9), 1), "tp_t": time.time(),
+                                    "speed_kmh": random.randint(40, 105) if driving else 0})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True
