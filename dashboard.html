@@ -262,8 +262,9 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .cs .l span { color: var(--text-3); }
 .cs .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .cs .v small { font-size: 12px; color: var(--text-2); font-weight: 500; margin-left: 2px; }
-.cs .tyres { display: grid; grid-template-columns: auto auto; justify-content: start; column-gap: 14px; font-size: 15px; }
+.cs .tyres { display: grid; grid-template-columns: auto auto; justify-content: start; column-gap: 18px; font-size: 15px; }
 .cs .tyres .low { color: var(--warn); }
+.cs .tyres .pos { font-size: 11px; font-weight: 600; color: var(--text-3); margin: 0 5px 0 0; }
 @media (max-width: 760px) { .carstats { grid-template-columns: 1fr 1fr; } }
 .exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
 .exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
@@ -803,9 +804,11 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       var vals = tyres.map(function (k) { return has(k) ? veh[k] : null; });
       var top = Math.max.apply(null, vals.filter(function (v) { return v !== null; }));
       // flag a tyre that's under 36 psi or 4 psi below the others
-      $("cs-tyres").innerHTML = vals.map(function (v) {
-        if (v === null) return "<span class='muted'>n/a</span>";
-        return "<span" + (v < 36 || top - v >= 4 ? " class='low' title='Lower than the others'" : "") + ">" + Math.round(v) + "</span>";
+      var names = ["FL", "FR", "RL", "RR"];
+      $("cs-tyres").innerHTML = vals.map(function (v, i) {
+        var tag = "<small class='pos'>" + names[i] + "</small>";
+        if (v === null) return "<span>" + tag + "<span class='muted'>n/a</span></span>";
+        return "<span" + (v < 36 || top - v >= 4 ? " class='low' title='Lower than the others'" : "") + ">" + tag + Math.round(v) + "</span>";
       }).join("");
       $("cs-tpt").textContent = "psi" + (veh.tp_t ? ", " + (Date.now() / 1000 - veh.tp_t < 86400 ? hm(veh.tp_t)
         : new Date(veh.tp_t * 1000).toLocaleDateString([], { day: "numeric", month: "short" })) : "");
