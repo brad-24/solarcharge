@@ -375,6 +375,70 @@ class Teslemetry(object):
 
 
 
+class Weather(object):
+    """Today's weather from Open-Meteo: now, today's range and the next hours, refreshed every 30 minutes."""
+
+    def __init__(self, s):
+        self.s = s
+        self.data = None
+        self.updated = 0.0
+        self.error = ""
+
+    def start(self):
+        th = threading.Thread(target=self._run, name="weather")
+        th.daemon = True
+        th.start()
+
+    def _run(self):
+        while True:
+            try:
+                self.data = self.fetch()
+                self.updated = time.time()
+                self.error = ""
+                time.sleep(30 * 60)
+            except Exception as e:
+                self.error = str(e)
+                log.warning("Weather unavailable: %s", e)
+                time.sleep(10 * 60)
+
+    def fetch(self):
+        url = ("https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
+               "&current=temperature_2m,apparent_temperature,weather_code,is_day"
+               "&hourly=temperature_2m,precipitation_probability,weather_code,is_day,shortwave_radiation"
+               "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum"
+               "&timezone=auto&forecast_days=2") % (self.s.lat, self.s.lon)
+        req = Request(url, headers={"User-Agent": "solarcharge/" + VERSION})
+        with urlopen(req, timeout=20) as r:
+            return self.parse(json.loads(r.read().decode("utf-8")), self.s.pv_kwp)
+
+    @staticmethod
+    def parse(j, kwp):
+        c, h, d = j.get("current") or {}, j.get("hourly") or {}, j.get("daily") or {}
+        col = lambda src, k, i: (src.get(k) or [None] * (i + 1))[i] if i < len(src.get(k) or []) else None
+        hours = []
+        for i, t in enumerate(h.get("time") or []):
+            rad = col(h, "shortwave_radiation", i)
+            hours.append({"t": t, "temp": col(h, "temperature_2m", i), "rain": col(h, "precipitation_probability", i),
+                          "code": col(h, "weather_code", i), "day": col(h, "is_day", i),
+                          # same rough conversion as the daily forecast: panels give about 80% of rated output
+                          "solar_kw": round(rad / 1000.0 * kwp * 0.8, 1) if rad is not None else None})
+        return {
+            "now": {"temp": c.get("temperature_2m"), "feels": c.get("apparent_temperature"),
+                    "code": c.get("weather_code"), "day": c.get("is_day")},
+            "today": {"min": col(d, "temperature_2m_min", 0), "max": col(d, "temperature_2m_max", 0),
+                      "rain": col(d, "precipitation_probability_max", 0), "rain_mm": col(d, "precipitation_sum", 0)},
+            "hours": hours,
+        }
+
+    def snapshot(self, now):
+        if not self.data:
+            return {"ok": False, "error": self.error or "Loading"}
+        hour = time.strftime("%Y-%m-%dT%H:00", time.localtime(now))
+        nxt = [x for x in self.data["hours"] if x["t"] >= hour][:12]
+        return {"ok": True, "now": self.data["now"], "today": self.data["today"], "hours": nxt,
+                "updated": self.updated}
+
+
 class Forecast(object):
     """Seven day solar forecast from Open-Meteo (free, no account), refreshed every three hours."""
 
@@ -1055,6 +1119,7 @@ class Controller(object):
         self.sessions = storage.load_sessions() if storage else []
         self.last_full = st.get("last_full")
         self.forecast = None
+        self.weather = None
         self.session = st.get("session")
         self.archived_through = st.get("archived_through")   # last day written to the archive
 
@@ -2034,6 +2099,8 @@ class Handler(BaseHTTPRequestHandler):
             self._page("sessions.html")
         elif u.path == "/api/schedule":
             self._json(c.get_schedule())
+        elif u.path == "/api/weather":
+            self._json(c.weather.snapshot(c.clock()) if c.weather else {"ok": False, "error": "off"})
         elif u.path == "/api/days":
             self._json(c.get_days())
         else:
@@ -2227,8 +2294,27 @@ def main():
                 "precipitation_probability_max": [_r.choice([0, 10, 40, 80]) for _ in range(8)],
                 "cloud_cover_mean": [_r.choice([10, 30, 60, 90]) for _ in range(8)]}, s.pv_kwp)
             ctl.last_full = clock() - 4 * 86400
+            # a made up sunny spring day for the weather card
+            ctl.weather = Weather(s)
+            day0 = datetime.fromtimestamp(clock()).strftime("%Y-%m-%d")
+            hrs = ["%sT%02d:00" % (day0, i) for i in range(24)]
+            hrs += ["%sT%02d:00" % (datetime.fromordinal(base.toordinal() + 1).strftime("%Y-%m-%d"), i) for i in range(24)]
+            curve = lambda i: max(0.0, math.sin(((i % 24) - 5.5) / 13.0 * math.pi))
+            ctl.weather.data = Weather.parse({
+                "current": {"temperature_2m": 21.4, "apparent_temperature": 19.8, "weather_code": 1, "is_day": 1},
+                "hourly": {"time": hrs,
+                           "temperature_2m": [round(14 + 13 * curve(i - 2), 1) for i in range(48)],
+                           "precipitation_probability": [5 if i % 24 < 14 else 20 for i in range(48)],
+                           "weather_code": [1 if i % 24 < 9 else 0 if i % 24 < 15 else 2 for i in range(48)],
+                           "is_day": [1 if 5 <= i % 24 < 18 else 0 for i in range(48)],
+                           "shortwave_radiation": [round(950 * curve(i)) for i in range(48)]},
+                "daily": {"temperature_2m_max": [27, 29], "temperature_2m_min": [14, 15],
+                          "precipitation_probability_max": [20, 10], "precipitation_sum": [0.4, 0]}}, s.pv_kwp)
+            ctl.weather.updated = time.time()
         else:
             ctl.forecast.start()
+            ctl.weather = Weather(s)
+            ctl.weather.start()
 
     srv = start_web(ctl, s)
     log.info("Dashboard on http://%s:%d", s.web_bind if s.web_bind != "0.0.0.0" else "<pi address>", s.web_port)

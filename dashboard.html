@@ -25,6 +25,9 @@
   --s-solar: #eb6834;
   --s-car: #1baf7a;
   --s-cabin: #7a4fd4;
+  --wx-lo: #2f8fbf;
+  --wx-hi: #c97a12;
+  --wx-rain: #2a7fc9;
   --s-outside: #c08a1e;
   --t-left: #d1612f;
   --t-right: #2a78d6;
@@ -50,6 +53,9 @@
     --s-solar: #d95926;
     --s-car: #199e70;
     --s-cabin: #a17ff0;
+    --wx-lo: #9fd4ec;
+    --wx-hi: #f0b45a;
+    --wx-rain: #7dbcf0;
     --s-outside: #e0b04a;
     --t-left: #e67a45;
     --t-right: #4f97ec;
@@ -74,6 +80,9 @@
   --s-solar: #d95926;
   --s-car: #199e70;
   --s-cabin: #a17ff0;
+  --wx-lo: #9fd4ec;
+  --wx-hi: #f0b45a;
+  --wx-rain: #7dbcf0;
   --s-outside: #e0b04a;
   --t-left: #e67a45;
   --t-right: #4f97ec;
@@ -312,6 +321,32 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   :root:not([data-theme="light"]) .theme .i-moon { display: none; }
 }
 .theme:hover { color: var(--text); }
+
+/* ---- weather */
+.wx { margin-bottom: 14px; }
+.wxtop { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.wxnow { display: flex; align-items: center; gap: 14px; }
+.wxbig .ic { width: 52px; height: 52px; }
+.wxtemp { font-size: 34px; font-weight: 650; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.wxcond { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+.wxtoday { text-align: right; font-size: 15px; font-variant-numeric: tabular-nums; }
+.wxtoday .lbl { font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); margin-right: 6px; }
+.wxtoday .lo { color: var(--wx-lo); font-weight: 600; margin-right: 6px; }
+.wxtoday .hi { color: var(--wx-hi); font-weight: 600; }
+.wxtoday .rain { font-size: 13px; color: var(--wx-rain); margin-top: 4px; }
+.wxhours { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(58px, 1fr); gap: 4px; margin-top: 14px;
+  overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.wxhours::-webkit-scrollbar { display: none; }
+.wxh { text-align: center; padding: 8px 2px; border-radius: 10px; }
+.wxh.now { background: var(--surface-2); }
+.wxh .t { font-size: 12px; color: var(--text-2); }
+.wxh .ic { width: 28px; height: 28px; margin: 5px auto 3px; display: block; }
+.wxh .tp { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.wxh .rn { font-size: 11px; color: var(--wx-rain); margin-top: 2px; }
+.wxh .pv { font-size: 11px; color: var(--text-3); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.wxnote { font-size: 12px; color: var(--text-3); margin-top: 8px; }
+@media (max-width: 600px) { .wxtoday { text-align: left; width: 100%; } }
+.wxnote a { color: inherit; }
 </style>
 </head>
 <body>
@@ -382,6 +417,24 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     </div>
   </section>
   </div>
+
+  <section class="card wx" id="wx" hidden>
+    <div class="wxtop">
+      <div class="wxnow">
+        <span id="wx-icon" class="wxbig"></span>
+        <div>
+          <div class="wxtemp" id="wx-temp"></div>
+          <div class="wxcond" id="wx-cond"></div>
+        </div>
+      </div>
+      <div class="wxtoday">
+        <div><span class="lbl">Today</span> <span class="lo" id="wx-lo"></span> <span class="hi" id="wx-hi"></span></div>
+        <div class="rain" id="wx-rain"></div>
+      </div>
+    </div>
+    <div class="wxhours" id="wx-hours"></div>
+    <div class="wxnote" id="wx-note"></div>
+  </section>
 
   <section class="card sched" id="sched" hidden>
     <div class="top">
@@ -1205,6 +1258,54 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     } else $("cs-tyres").innerHTML = "<span class='muted'>n/a</span>";
   }
 
+  // ---- weather card
+  var WXI = {
+    moon: "<svg class='ic' viewBox='0 0 32 32'><path d='M21 22.5A9 9 0 0 1 12.5 8a9 9 0 1 0 12 11.4 8.8 8.8 0 0 1-3.5 3.1z' fill='#d9dde6'/></svg>",
+    moonCloud: "<svg class='ic' viewBox='0 0 32 32'><path d='M15 13a6 6 0 0 1-5.5-8.2 6.5 6.5 0 1 0 8 8.3A6 6 0 0 1 15 13z' fill='#d9dde6'/><path d='M11 27h13a5 5 0 0 0 0-10 7 7 0 0 0-13 3 4 4 0 0 0 0 7z' fill='#aab1bb'/></svg>",
+    fog: "<svg class='ic' viewBox='0 0 32 32'><g stroke='#9aa1ab' stroke-width='2.6' stroke-linecap='round'><path d='M6 12h20M4 17h24M7 22h18'/></g></svg>",
+    rain: "<svg class='ic' viewBox='0 0 32 32'><path d='M8 20h16a6 6 0 0 0 0-12 8 8 0 0 0-15 2.5A4.8 4.8 0 0 0 8 20z' fill='#8e959f'/><g stroke='#4b9be0' stroke-width='2.2' stroke-linecap='round'><path d='M11 23l-1.5 4M17 23l-1.5 4M23 23l-1.5 4'/></g></svg>",
+    storm: "<svg class='ic' viewBox='0 0 32 32'><path d='M8 19h16a6 6 0 0 0 0-12 8 8 0 0 0-15 2.5A4.8 4.8 0 0 0 8 19z' fill='#7d848e'/><path d='M17 18l-5 7h4l-2 5 6-8h-4l2-4z' fill='#f5b31c'/></svg>"
+  };
+  // WMO weather codes to an icon and words
+  function wxKind(code, day) {
+    if (code === null || code === undefined) return [ICON.unknown, ""];
+    if (code === 0) return day ? [ICON.sunny, "Sunny"] : [WXI.moon, "Clear"];
+    if (code === 1) return day ? [ICON["mostly sunny"], "Mostly sunny"] : [WXI.moonCloud, "Mostly clear"];
+    if (code === 2) return day ? [ICON["partly cloudy"], "Partly cloudy"] : [WXI.moonCloud, "Partly cloudy"];
+    if (code === 3) return [ICON.cloudy, "Cloudy"];
+    if (code === 45 || code === 48) return [WXI.fog, "Fog"];
+    if (code >= 51 && code <= 57) return [WXI.rain, "Drizzle"];
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return [WXI.rain, code >= 80 ? "Showers" : "Rain"];
+    if (code >= 71 && code <= 77) return [ICON.cloudy, "Snow"];
+    if (code >= 95) return [WXI.storm, "Storm"];
+    return [ICON.cloudy, ""];
+  }
+  function deg0(v) { return v === null || v === undefined ? "" : Math.round(v) + "°"; }
+  function pollWeather() {
+    fetch("/api/weather", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (w) {
+      if (!w.ok) { $("wx").hidden = true; return; }
+      $("wx").hidden = false;
+      var k = wxKind(w.now.code, w.now.day);
+      $("wx-icon").innerHTML = k[0];
+      $("wx-temp").textContent = w.now.temp !== null ? w.now.temp.toFixed(1) + "°" : "";
+      $("wx-cond").textContent = k[1] + (w.now.feels !== null && w.now.feels !== undefined ? " · Feels like " + w.now.feels.toFixed(1) + "°" : "");
+      $("wx-lo").textContent = deg0(w.today.min);
+      $("wx-hi").textContent = deg0(w.today.max);
+      var mm = w.today.rain_mm;
+      $("wx-rain").textContent = (w.today.rain !== null ? w.today.rain + "% chance of rain" : "") +
+        (mm !== null && mm !== undefined ? (mm < 1 ? ", under 1 mm" : ", " + Math.round(mm) + " mm") : "");
+      $("wx-hours").innerHTML = w.hours.map(function (h, i) {
+        var hk = wxKind(h.code, h.day), d = new Date(h.t + ":00");
+        var lbl = i === 0 ? "Now" : d.toLocaleTimeString([], { hour: "numeric" }).replace(":00", "").replace(/\s/g, "").toLowerCase();
+        return "<div class='wxh" + (i === 0 ? " now" : "") + "' title='" + hk[1] + "'><div class='t'>" + lbl + "</div>" + hk[0] +
+          "<div class='tp'>" + deg0(h.temp) + "</div><div class='rn'>" + (h.rain !== null ? h.rain + "%" : "") + "</div>" +
+          "<div class='pv'>" + (h.solar_kw ? h.solar_kw.toFixed(1) + " kW" : "") + "</div></div>";
+      }).join("");
+      $("wx-note").innerHTML = "Hourly: temperature, chance of rain and expected solar. Updated " + hm(w.updated) +
+        ". Weather: <a href='https://open-meteo.com/' target='_blank' rel='noopener'>Open-Meteo.com</a>";
+    }).catch(function () {});
+  }
+
   // ---- full charge schedule
   var ICON = {
     "sunny": "<svg class='ic' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='#f5b31c'/><g stroke='#f5b31c' stroke-width='2.4' stroke-linecap='round'><path d='M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M6.8 25.2l2.8-2.8M22.4 9.6l2.8-2.8'/></g></svg>",
@@ -1262,7 +1363,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
   }
 
-  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar(); pollExports(); pollTyres();
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar(); pollExports(); pollTyres(); pollWeather();
+  setInterval(pollWeather, 600000);
   setInterval(pollTyres, 600000);
   setInterval(pollExports, 3600000);
   setInterval(pollCar, 60000);

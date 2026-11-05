@@ -16,6 +16,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Tyres chart** of every reading over 3 or 7 days, or each tyre's daily average over 30 or 90 days, so a slow leak stands out
 * **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
 * **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, cost and money saved, with a CSV download
+* **Weather card** with the current conditions, today's high and low, and the next 12 hours: temperature, chance of rain and expected solar output
 * **Full charge tracker** for LFP batteries, which should reach 100% about once a week. It shows when the last one happened and suggests the sunniest day for the next, using a free solar forecast from Open Meteo
 * **Easy on the SD card:** routine readings live in RAM, only events and summaries are saved to disk
 * **Python standard library only**, nothing to install. Runs happily alongside Pihole on an old Pi
