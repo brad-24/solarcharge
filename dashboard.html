@@ -330,7 +330,11 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 .wxtemp { font-size: 34px; font-weight: 650; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .wxcond { font-size: 13px; color: var(--text-2); margin-top: 4px; }
 .wxtoday { text-align: right; font-size: 20px; font-variant-numeric: tabular-nums; }
-.wxtoday .lbl { font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); margin-right: 6px; }
+.wxtoday .lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
+.wxtoday .range2 { display: inline-flex; align-items: baseline; gap: 5px; }
+.wxtoday .k { font-size: 12px; color: var(--text-2); }
+.wxtoday .k + .lo, .wxtoday .k + .hi { margin-right: 8px; }
+.wxtoday .hi { margin-right: 0 !important; }
 .wxtoday .lo { color: var(--wx-lo); font-weight: 600; margin-right: 6px; }
 .wxtoday .hi { color: var(--wx-hi); font-weight: 600; }
 .wxtoday .rain { font-size: 13px; color: var(--wx-rain); margin-top: 4px; }
@@ -433,7 +437,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         </div>
       </div>
       <div class="wxtoday">
-        <div><span class="lo" id="wx-lo"></span> <span class="hi" id="wx-hi"></span></div>
+        <div class="lbl">Forecast</div>
+        <div class="range2"><span class="k">Low</span><span class="lo" id="wx-lo"></span><span class="k">High</span><span class="hi" id="wx-hi"></span></div>
         <div class="rain" id="wx-rain"></div>
       </div>
     </div>
