@@ -2038,7 +2038,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         c = self.controller
-        if u.path in ("/", "/index.html"):
+        if u.path in ("/", "/index.html", "/car"):
             self._page("dashboard.html")
         elif u.path in ("/img/scene.jpg", "/img/scene-day.jpg", "/img/scene-dusk.jpg",
                         "/img/icon-180.png", "/favicon.ico"):

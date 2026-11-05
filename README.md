@@ -12,7 +12,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Teslemetry if Bluetooth is busy or fails
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too
-* **Temps and Car charts** over the last day, 3, 7, 30 or 90 days: cabin and outside temperature and battery level, plus range, odometer, distance driven and top speed today
+* **Car tab** with Temps and Car charts over the last day, 3, 7, 30 or 90 days: cabin and outside temperature and battery level, plus range, odometer, distance driven and top speed today
 * **Tyres chart** of every reading over 3 or 7 days, or each tyre's daily average over 30 or 90 days, so a slow leak stands out
 * **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
 * **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, cost and money saved, with a CSV download

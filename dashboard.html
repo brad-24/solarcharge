@@ -347,13 +347,17 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 .wxnote { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 @media (max-width: 600px) { .wxtoday { text-align: left; width: 100%; } }
 .wxnote a { color: inherit; }
+
+/* ---- views: the car charts live on /car, everything else on / */
+.wrap.v-main > .carview { display: none; }
+.wrap.v-car > *:not(header):not(.carview):not(footer) { display: none !important; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a></nav>
+    <nav class="nav"><a href="/" id="nav-dash">Dashboard</a><a href="/car" id="nav-car">Car</a><a href="/sessions">Sessions</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
@@ -477,7 +481,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
   </section>
 
-  <section class="card" style="margin-bottom:14px">
+  <section class="card carview" style="margin-bottom:14px">
     <div class="charthead">
       <h2>Temps</h2>
       <div class="legendrow">
@@ -496,7 +500,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="chartnote" id="tnote"></div>
   </section>
 
-  <section class="card" style="margin-bottom:14px">
+  <section class="card carview" style="margin-bottom:14px">
     <div class="charthead">
       <h2>Car</h2>
       <div class="legendrow">
@@ -520,7 +524,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="chartnote" id="cnote">The car only reports while it's awake, so gaps are normal while it sleeps.</div>
   </section>
 
-  <section class="card" style="margin-bottom:14px">
+  <section class="card carview" style="margin-bottom:14px">
     <div class="charthead">
       <h2>Tyres</h2>
       <div class="legendrow">
@@ -558,6 +562,13 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 </div>
 
 <script>
+  // one page, two views: /car shows the car charts, / shows everything else
+  (function () {
+    var car = location.pathname === "/car";
+    document.getElementById("wrap").classList.add(car ? "v-car" : "v-main");
+    document.getElementById(car ? "nav-car" : "nav-dash").classList.add("on");
+    if (car) document.title = "Car \u00b7 SolarCharge";
+  })();
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
@@ -809,6 +820,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 
   function drawChart() {
     var box = $("chart"), tip = $("tip");
+    if (!box.clientWidth) return;   // not on this view
     var old = box.querySelector("svg"); if (old) old.remove();
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
     var now = state ? state.time : Date.now() / 1000;
@@ -1006,6 +1018,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 
   function drawTele(cfg) {
     var box = $(cfg.box), tip = $(cfg.tip);
+    if (!box.clientWidth) return;   // not on this view
     var old = box.querySelector("svg"); if (old) old.remove();
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
     var now = state ? state.time : Date.now() / 1000;
@@ -1148,6 +1161,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   });
   function drawTyres() {
     var box = $("ychart"), tip = $("ytip");
+    if (!box.clientWidth) return;   // not on this view
     var old = box.querySelector("svg"); if (old) old.remove();
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
     var raw = tyreDays <= 7;
