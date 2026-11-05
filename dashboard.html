@@ -177,6 +177,7 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .sched .due.late { color: var(--crit); }
 .sched .meta { font-size: 13px; color: var(--text-2); }
 .sched .why { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.sched .why a { color: inherit; }
 .sched .btn { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
   border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 .sched .btn:hover { color: var(--text); border-color: var(--text-3); }
@@ -388,7 +389,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         <h2>Full charge</h2>
         <div class="due" id="sc-due">&nbsp;</div>
         <div class="meta" id="sc-meta">&nbsp;</div>
-        <div class="why">LFP batteries should reach 100% about once a week so the car can keep its range estimate accurate.</div>
+        <div class="why">LFP batteries should reach 100% about once a week so the car can keep its range estimate accurate.
+          Solar forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</div>
       </div>
     </div>
     <div class="days7" id="sc-days"></div>
