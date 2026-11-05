@@ -672,12 +672,12 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     $("cable").classList.toggle("on", !!ch.charging);
   }
 
-  // the clock ticks every second from the Pi's time; the data refreshes every 10 seconds
+  // the clock follows the Pi's time, checked every second so the minute turns over on time; the data refreshes every 10 seconds
   var clockBase = null;
   function tickClock() {
     if (!clockBase) return;
     var t = clockBase[0] + (Date.now() / 1000 - clockBase[1]);
-    $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
   }
 
   function render(s) {
