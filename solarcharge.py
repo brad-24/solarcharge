@@ -86,6 +86,9 @@ DEFAULTS = {
         "fallback_teslemetry": "true",
         "read_battery_minutes": "3",
         "fast_tracking": "true",
+        # most amp increases a day that may go through Teslemetry (1 credit each) while
+        # Bluetooth is unavailable. Starts, stops and decreases are never held back.
+        "teslemetry_raises_per_day": "10",
     },
     "control": {
         "dry_run": "true",
@@ -173,6 +176,7 @@ class Settings(object):
         self.ble_fallback = gb("ble", "fallback_teslemetry")
         self.ble_read_min = gf("ble", "read_battery_minutes")
         self.ble_fast = gb("ble", "fast_tracking")
+        self.cloud_raises_day = gi("ble", "teslemetry_raises_per_day")
 
         self.dry_run = gb("control", "dry_run")
         self.default_mode = g("control", "default_mode").strip()
@@ -198,6 +202,9 @@ class Settings(object):
         self.no_charge_grace = gf("control", "no_charge_grace_s")
         self.no_charge_backoff = gf("control", "no_charge_backoff_s")
         self.cmd_retry = gf("control", "command_retry_s")
+        # the measured pace for commands that cost credits; Bluetooth may use a quicker one
+        self.cloud_up_interval, self.cloud_down_interval = self.up_interval, self.down_interval
+        self.cloud_max_raises, self.cloud_headroom = self.max_raises_hour, self.up_headroom
 
         self.ram_dir = os.path.expanduser(g("storage", "ram_dir").strip())
         self.data_dir = os.path.expanduser(g("storage", "data_dir").strip())
@@ -695,6 +702,16 @@ class CarControl(object):
             self._remember(name, body)
         return ok, err
 
+    def cloud_only(self):
+        """True while commands would go through Teslemetry (and cost credits) instead of Bluetooth."""
+        if not self.ble.configured():
+            return True
+        if not (self.s.ble_fallback and self.cloud.configured()):
+            return False
+        # while the car's Bluetooth is full, or the last command had to use Teslemetry, assume the
+        # next one will too, until Bluetooth works again
+        return time.time() < self.busy_until or self.last_path == "teslemetry"
+
     def _remember(self, name, body):
         if name == "set_charging_amps":
             self.prev_amps = int((body or {}).get("charging_amps", 0))
@@ -1085,6 +1102,7 @@ class Controller(object):
         self.not_charging_since = None
         self.self_started = False
         self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
+        self.cloud_cap_noted = False     # logged that today's Teslemetry amp increases are used up
         self.self_starts = deque()       # times the car restarted by itself, to catch a stop and start loop
         self.grid_samples = deque()
         self.raises = deque()
@@ -1157,7 +1175,7 @@ class Controller(object):
     def _blank_today(self):
         return {"pv_wh": 0.0, "car_wh": 0.0, "car_solar_wh": 0.0,
                 "import_wh": 0.0, "export_wh": 0.0, "commands": 0,
-                "starts": 0, "stops": 0}
+                "starts": 0, "stops": 0, "cloud_raises": 0}
 
     def event(self, msg, level=logging.INFO):
         if self.dry_run and msg.startswith(("Start", "Stop", "Set ")):
@@ -1165,13 +1183,25 @@ class Controller(object):
         log.log(level, msg)
         self.events.appendleft({"t": self.clock(), "msg": msg})
 
+    def _cloud(self):
+        """True when the next command would cost a Teslemetry credit."""
+        f = getattr(self.tesla, "cloud_only", None)
+        return f() if f else not self.simulated
+
+    def _pace(self):
+        """(up interval, down interval, raises per hour, headroom) for the route commands take now."""
+        s = self.s
+        if self._cloud():
+            return s.cloud_up_interval, s.cloud_down_interval, s.cloud_max_raises, s.cloud_headroom
+        return s.up_interval, s.down_interval, s.max_raises_hour, s.up_headroom
+
     def _clamp(self, a):
         return int(max(self.s.min_amps, min(self.s.max_amps, a)))
 
     def _track(self, avg):
         """Deadband: raise only with real spare solar, lower only when importing past the allowance."""
         V = self.volts
-        up = int(math.floor((avg - self.s.up_headroom) / V))
+        up = int(math.floor((avg - self._pace()[3]) / V))
         down = int(math.floor((avg + self.s.allowance) / V))
         if up >= self.amps + self.s.min_change:
             return self._clamp(up)
@@ -1485,22 +1515,35 @@ class Controller(object):
             new = None
             while self.raises and now - self.raises[0] > 3600:
                 self.raises.popleft()
+            up_iv, down_iv, max_raises, _ = self._pace()
+            cloud = self._cloud()
             if self.mode == "fast":
                 new = want_amps  # Fast goes straight to the target, no ramping
             elif want_amps > self.amps:
                 # raise slowly, only when the extra solar has lasted, and not too often
-                if since >= max(self.s.up_interval, self.s.down_interval) and len(self.raises) < self.s.max_raises_hour:
-                    new = min(want_amps, self.amps + self.s.up_step)
+                if since >= max(up_iv, down_iv) and len(self.raises) < max_raises:
+                    # the daily cap is for Bluetooth setups falling back; Teslemetry only setups pace themselves
+                    if cloud and isinstance(self.tesla, CarControl) and \
+                            self.today.get("cloud_raises", 0) >= self.s.cloud_raises_day:
+                        if not self.cloud_cap_noted:
+                            self.cloud_cap_noted = True
+                            self.event("Bluetooth unavailable and today's %d Teslemetry amp increases are used, "
+                                       "so holding at %d A to save credits" % (self.s.cloud_raises_day, self.amps))
+                    else:
+                        new = min(want_amps, self.amps + self.s.up_step)
             elif want_amps < self.amps:
                 # lower once the last change has settled, or quickly if importing heavily
                 recent = [g for _, g in self.grid_samples]
                 heavy = recent and sum(recent) / len(recent) > self.s.allowance + self.s.emergency_import
-                if since >= self.s.down_interval or (heavy and since >= 20):
+                if since >= down_iv or (heavy and since >= 20):
                     new = want_amps
             if new is not None and self._send(now, "set_charging_amps", {"charging_amps": new}):
-                self.event("Set amps %d to %d (%d W available)" % (self.amps, new, avg))
+                paid = getattr(self.tesla, "last_path", "teslemetry") == "teslemetry" and not self.simulated
+                self.event("Set amps %d to %d (%d W available)%s" % (self.amps, new, avg, " via Teslemetry" if paid else ""))
                 if new > self.amps:
                     self.raises.append(now)
+                    if paid:
+                        self.today["cloud_raises"] = self.today.get("cloud_raises", 0) + 1
                 self.amps = new
                 self.last_amp_change = now
 
@@ -1868,6 +1911,7 @@ class Controller(object):
                     del self.days[old]
             self.today_key = key
             self.today = self._blank_today()
+            self.cloud_cap_noted = False
 
     def _archive_pending(self, now):
         """Writes every finished day not yet archived: minute data and the daily totals."""
