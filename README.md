@@ -146,7 +146,7 @@ SolarCharge starts in **dry run**: it works out and logs every decision but send
 Things to know in Solar mode:
 
 * If you plug in at night, the car starts charging by itself and SolarCharge stops it after a few minutes. Switch to Fast or Manual if you want it to keep going
-* When the car reaches its charge limit it stops drawing power. SolarCharge notices and backs off for 30 minutes
+* When the car reaches its charge limit it stops drawing power. SolarCharge notices and backs off for 30 minutes. If it knows the battery level (from Teslemetry or TeslaTrack), it doesn't try again until the level drops below the limit
 * If the inverter can't be read for a minute, charging stops
 
 ## How the decisions are made

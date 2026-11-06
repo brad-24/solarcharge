@@ -1540,6 +1540,12 @@ class Controller(object):
                 "%H:%M", time.localtime(self.refused_until))
             return
 
+        if not self.on and self._at_limit():
+            self.above_since = None
+            v = self.vehicle
+            self.reason = "Battery at its charge limit (%d%% of %d%%), waiting until it drops" % (v["soc"], v["limit"])
+            return
+
         # inverter fail safe
         if inv is None and self.mode in ("solar", "minsolar"):
             failed_for = now - (self.inv_fail_since or now)
@@ -1596,6 +1602,15 @@ class Controller(object):
                 want_amps = self._track(avg)
 
         self._apply(now, want_on, want_amps, avg)
+
+    def _at_limit(self):
+        """True when the car recently reported a battery level at or above its charge limit. The car would
+        refuse a start anyway, so sending one only wakes it (and may use a Teslemetry credit)."""
+        v = self.vehicle or {}
+        soc, limit = v.get("soc"), v.get("limit")
+        if soc is None or not limit or time.time() - v.get("t", 0) > 24 * 3600:
+            return False
+        return soc >= limit
 
     def _apply(self, now, want_on, want_amps, avg):
         if want_on and not self.on:
