@@ -376,7 +376,7 @@ nav a[hidden] { display: none !important; }
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a><a href="#" id="nav-tt" hidden>TeslaTrack</a></nav>
+    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
@@ -624,15 +624,7 @@ nav a[hidden] { display: none !important; }
     $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
   }
 
-  function ttLink(port) {
-    var a = $("nav-tt");
-    if (!port) { a.hidden = true; return; }
-    a.hidden = false;
-    a.href = location.protocol + "//" + location.hostname + ":" + port + "/";
-  }
-
   function render(s) {
-    ttLink(s.teslatrack_port);
     state = s;
     var pill = $("runpill");
     var age = Date.now() / 1000 - (s.simulated ? Date.now() / 1000 : s.time);

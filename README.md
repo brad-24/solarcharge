@@ -19,7 +19,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Easy on the SD card:** routine readings live in RAM, only events and summaries are saved to disk
 * **Python standard library only**, nothing to install. Runs happily alongside Pihole on an old Pi
 
-For trips, battery health, tyres, temperatures and the car's status, see the companion app **[TeslaTrack](https://github.com/brad-24/teslatrack)**. They run side by side on the same Pi and link to each other.
+For trips, battery health, tyres, temperatures and the car's status, see the companion app **[TeslaTrack](https://github.com/brad-24/teslatrack)**. They run side by side on the same Pi.
 
 <img src="docs/phone.jpg" width="300" alt="Dashboard on a phone">
 

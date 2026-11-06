@@ -2026,7 +2026,6 @@ class Controller(object):
         car_kwh = t["car_wh"] / 1000.0
         snap = {
             "version": VERSION,
-            "teslatrack_port": (urlparse(self.s.teslatrack_url).port or 8084) if self.s.teslatrack_url else 0,
             "time": now,
             "dry_run": self.dry_run,
             "simulated": self.simulated,
@@ -2117,14 +2116,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         c = self.controller
-        if u.path == "/car" and c.s.teslatrack_url:
-            # the car pages moved to TeslaTrack
-            host = (self.headers.get("Host") or "localhost").split(":")[0]
-            port = urlparse(c.s.teslatrack_url).port or 8084
-            self.send_response(302)
-            self.send_header("Location", "http://%s:%d/" % (host, port))
-            self.end_headers()
-        elif u.path in ("/", "/index.html", "/car"):
+        if u.path in ("/", "/index.html"):
             self._page("dashboard.html")
         elif u.path in ("/img/scene.jpg", "/img/scene-day.jpg", "/img/scene-dusk.jpg",
                         "/img/icon-180.png", "/favicon.ico"):
