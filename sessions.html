@@ -86,6 +86,7 @@ tr.month .mname { font-size: 13px; font-weight: 650; text-transform: uppercase; 
 tr.month .msum { font-size: 13px; color: var(--text-3); margin-left: 10px; }
 tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
+.pill.away { color: var(--accent); }
 .share { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .share .bar { width: 46px; height: 6px; border-radius: 3px; background: var(--s-grid); overflow: hidden; display: inline-block; }
 .share .bar i { display: block; height: 100%; background: var(--s-solar); }
@@ -151,7 +152,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       <table>
         <thead><tr>
           <th>Date</th><th class="hide-sm">Plugged in</th><th class="hide-sm">Charging</th>
-          <th>kWh</th><th>Solar</th><th class="hide-sm">Grid kWh</th><th class="hide-sm">Peak kW</th>
+          <th>kWh</th><th>Solar</th><th class="hide-sm">Grid kWh</th><th class="hide-sm">Peak kW</th><th class="hide-sm">Into battery</th>
           <th>Cost</th><th class="hide-sm">Saved</th>
         </tr></thead>
         <tbody id="rows"></tbody>
@@ -227,7 +228,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   function renderTable(list, live) {
     var head = (live || []).map(rowHtml).join("");
     if (!list.length) {
-      $("rows").innerHTML = head + "<tr><td colspan='9' class='muted' style='text-align:center;padding:24px'>No finished sessions in this period yet. A session is recorded when the car is unplugged.</td></tr>";
+      $("rows").innerHTML = head + "<tr><td colspan='10' class='muted' style='text-align:center;padding:24px'>No finished sessions in this period yet. A session is recorded when the car is unplugged.</td></tr>";
       return;
     }
     $("rows").innerHTML = head + list.map(rowHtml).join("");
@@ -237,11 +238,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
         var html = "";
         var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
         var span = hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
-        html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") +
+        var where = s.away ? "<span class='pill away'>" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>" : "";
+        html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
           "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
-          "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw || 0).toFixed(1) +
-          "</td><td>" + money(s.cost) + "</td><td class='hide-sm'>" + money(s.saved) + "</td></tr>";
+          "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw ? s.peak_kw.toFixed(1) : "<span class='muted'>n/a</span>") +
+          "</td><td class='hide-sm'>" + (s.batt_kwh ? kwh(s.batt_kwh) + (s.eff_pct ? " <span class='muted'>(" + s.eff_pct + "%)</span>" : "") : "<span class='muted'>n/a</span>") +
+          "</td><td>" + money(s.cost) + (s.away ? " <span class='muted' title='Estimated from the away charging prices in config.ini'>est.</span>" : "") +
+          "</td><td class='hide-sm'>" + money(s.saved) + "</td></tr>";
         return html;
   }
 
@@ -349,11 +353,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 
   $("csv").addEventListener("click", function () {
     if (!data) return;
-    var cols = ["start", "end", "kwh", "solar_kwh", "grid_kwh", "solar_pct", "charge_min", "plugged_min", "peak_kw", "cost", "saved", "starts", "stops", "commands"];
+    var cols = ["start", "end", "kwh", "solar_kwh", "grid_kwh", "solar_pct", "charge_min", "plugged_min", "peak_kw", "batt_kwh", "eff_pct", "cost", "saved", "starts", "stops", "commands", "where"];
     var lines = [["date", "plugged_in", "unplugged"].concat(cols.slice(2)).join(",")];
     inPeriod().slice().reverse().forEach(function (s) {
       var row = [dayKey(s.start), hm(s.start), s.live ? "" : hm(s.end)];
-      cols.slice(2).forEach(function (c) { row.push(s[c] === undefined ? "" : s[c]); });
+      cols.slice(2).forEach(function (c) {
+        var v = c === "where" ? (s.away ? (s.kind === "dc" ? "away fast charger" : "away public AC") : "home") : s[c];
+        row.push(v === undefined || v === null ? "" : v);
+      });
       lines.push(row.join(","));
     });
     var blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv" });

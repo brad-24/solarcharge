@@ -127,6 +127,9 @@ DEFAULTS = {
     "tariff": {
         "import_c_per_kwh": "30",
         "feed_in_c_per_kwh": "5",
+        # rough prices for charging away from home, for the Sessions page
+        "away_dc_c_per_kwh": "60",
+        "away_ac_c_per_kwh": "40",
     },
     "web": {
         "bind": "0.0.0.0",
@@ -177,6 +180,8 @@ class Settings(object):
         self.ble_read_min = gf("ble", "read_battery_minutes")
         self.ble_fast = gb("ble", "fast_tracking")
         self.cloud_raises_day = gi("ble", "teslemetry_raises_per_day")
+        self.away_dc_price = gf("tariff", "away_dc_c_per_kwh") / 100.0
+        self.away_ac_price = gf("tariff", "away_ac_c_per_kwh") / 100.0
 
         self.dry_run = gb("control", "dry_run")
         self.default_mode = g("control", "default_mode").strip()
@@ -799,6 +804,27 @@ class TeslemetryStream(object):
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _bool(v):
+        if isinstance(v, dict):
+            v = v.get("boolValue", v.get("value"))
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() == "true"
+        return None
+
+    @staticmethod
+    def _text(v):
+        if isinstance(v, dict):
+            v = v.get("stringValue", v.get("value"))
+        return v.strip() if isinstance(v, str) else None
+
+    @classmethod
+    def _enum(cls, v, prefix):
+        t = cls._text(v)
+        return t.replace(prefix, "") if t else None
+
     def _handle(self, payload):
         try:
             ev = json.loads(payload)
@@ -835,6 +861,55 @@ class TeslemetryStream(object):
                 v = self._num(data[key])
                 if v is not None and 0 <= v < 1000:
                     upd["range_km"] = int(round(v * MILE_KM))
+        # battery health
+        if "EnergyRemaining" in data:
+            v = self._num(data["EnergyRemaining"])
+            if v is not None and 0 <= v < 200:
+                upd["energy_kwh"] = round(v, 2)
+        for key, name in (("BrickVoltageMax", "brick_max"), ("BrickVoltageMin", "brick_min")):
+            if key in data:
+                v = self._num(data[key])
+                if v is not None and 1.5 < v < 5:
+                    upd[name] = round(v, 3)
+        # security
+        if "Locked" in data:
+            v = self._bool(data["Locked"])
+            if v is not None:
+                upd["locked"] = v
+        if "DoorState" in data and isinstance(data["DoorState"], dict):
+            upd["doors_open"] = sorted(k for k, v in data["DoorState"].items() if self._bool(v))
+        for key, name in (("FdWindow", "win_fd"), ("FpWindow", "win_fp"), ("RdWindow", "win_rd"), ("RpWindow", "win_rp")):
+            if key in data:
+                v = self._enum(data[key], "WindowState")
+                if v:
+                    upd[name] = v
+        if "SentryMode" in data:
+            v = self._enum(data["SentryMode"], "SentryModeState")
+            if v:
+                upd["sentry"] = v
+        # where the car is: used on the Pi only to work out home or away, never stored or shown
+        if "Location" in data and isinstance(data["Location"], dict):
+            lat, lon = self._num(data["Location"].get("latitude")), self._num(data["Location"].get("longitude"))
+            if lat is not None and lon is not None and (lat or lon):
+                upd["_loc"] = (lat, lon)
+        # charging away from home, and energy that reached the battery
+        if "FastChargerPresent" in data:
+            v = self._bool(data["FastChargerPresent"])
+            if v is not None:
+                upd["fast_charger"] = v
+        for key, name in (("DCChargingEnergyIn", "dc_in"), ("ACChargingEnergyIn", "ac_in")):
+            if key in data:
+                v = self._num(data[key])
+                if v is not None and 0 <= v < 500:
+                    upd[name] = round(v, 3)
+        # software
+        if "Version" in data:
+            v = self._text(data["Version"])
+            if v:
+                upd["version"] = v.split()[0]
+        if "SoftwareUpdateVersion" in data:
+            v = self._text(data["SoftwareUpdateVersion"])
+            upd["update_version"] = v.split()[0] if v else ""
         if "VehicleSpeed" in data:
             v = self._num(data["VehicleSpeed"])
             if v is not None and 0 <= v < 200:
@@ -954,7 +1029,8 @@ class Storage(object):
 
     MINUTES_HEADER = "time,solar_w,house_w,grid_w,car_w,car_amps,battery_pct,cabin_c,outside_c,range_km\n"
     DAILY_HEADER = ("date,solar_kwh,car_kwh,car_from_solar_kwh,imported_kwh,exported_kwh,starts,stops,commands,"
-                    "odometer_km,driven_km,top_kmh,tyre_fl_psi,tyre_fr_psi,tyre_rl_psi,tyre_rr_psi\n")
+                    "odometer_km,driven_km,top_kmh,tyre_fl_psi,tyre_fr_psi,tyre_rl_psi,tyre_rr_psi,"
+                    "battery_capacity_kwh,cell_spread_mv,battery_in_kwh,wh_per_km,away_charged_kwh,home_hours\n")
 
     def _append(self, path, header, lines):
         try:
@@ -1103,6 +1179,10 @@ class Controller(object):
         self.self_started = False
         self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
         self.cloud_cap_noted = False     # logged that today's Teslemetry amp increases are used up
+        self.wc_plugged = False          # Wall Charger says the car is plugged in (so it's at home)
+        self.events_pending = []         # events noticed in the stream thread, logged on the next tick
+        self.last_loc = None             # car's latest position, in memory only
+        self.away = st.get("away")       # a charging session away from home, while it's happening
         self.self_starts = deque()       # times the car restarted by itself, to catch a stop and start loop
         self.grid_samples = deque()
         self.raises = deque()
@@ -1130,6 +1210,10 @@ class Controller(object):
         self.car_compacted = 0.0
         # tyre pressures per day: {date: {"fl": [sum, count], ...}}, for the Tyres chart (90 days)
         self.tyre_days = st.get("tyre_days") or self._tyres_from_history()
+        # battery health per day: {date: {"cap": usable kWh at full, "soc": %, "cell_mv": spread}}
+        self.health = st.get("health") or {}
+        # where the car charges at home, learned while it's plugged into the Wall Charger (kept on the Pi)
+        self.home_loc = st.get("home_loc")
         self.vehicle_check = True       # one-off battery read when the car is awake (startup, plug in, charge end)
         self.vehicle_check_next = 0.0
         self.vehicle_next = 0.0
@@ -1308,12 +1392,19 @@ class Controller(object):
                         (self.last_chg["charging"] and not chg["charging"])):
                     self.vehicle_check = True
                 self.last_chg = chg
+                self.wc_plugged = bool(chg["plugged"])
                 if chg["volts"] > 180:
                     self.volts = chg["volts"]
 
         car_w = 0.0
         if chg is not None and chg["charging"]:
             car_w = chg["amps"] * self.volts
+
+        while self.events_pending:
+            self.event(self.events_pending.pop(0))
+        self._home_time(now, dt)
+        if self.away and now - self.away["last"] > 900:
+            self._end_away(now)
 
         if inv is not None:
             self.samples.append((now, car_w - inv["grid"]))
@@ -1570,7 +1661,20 @@ class Controller(object):
                 del self.tyre_days[old]
             if upd.get("speed_kmh"):
                 self.today["top_kmh"] = max(self.today.get("top_kmh", 0), upd["speed_kmh"])
+            loc = upd.pop("_loc", None)
+            if loc:
+                self._place(now, loc, upd)
+            for key in ("ac_in", "dc_in"):
+                if upd.get(key) is not None:
+                    self._battery_in(now, key, upd[key], v.get(key), upd.get("fast_charger", v.get("fast_charger")))
+            if upd.get("energy_kwh") is not None:
+                if "e_start" not in self.today:
+                    self.today["e_start"] = v.get("energy_kwh") if v.get("energy_kwh") is not None else upd["energy_kwh"]
+                self.today["e_end"] = upd["energy_kwh"]
             v.update(upd)
+            if v.get("brick_max") and v.get("brick_min"):
+                v["cell_mv"] = int(round((v["brick_max"] - v["brick_min"]) * 1000))
+            self._health_point(now, v, upd)
             v["t"] = time.time()
             self.vehicle = v
             self._car_point(now, upd)
@@ -1581,6 +1685,101 @@ class Controller(object):
             self.event("Battery reached 100%%. Next full charge due %s" % time.strftime(
                 "%a %d %b", time.localtime(now + self.s.full_every * 86400)))
             self._save(now)
+
+    HOME_RADIUS_M = 250
+
+    @staticmethod
+    def _dist_m(a, b):
+        """Distance in metres between two (lat, lon) points."""
+        la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+        h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+        return 6371000 * 2 * math.asin(math.sqrt(h))
+
+    def _place(self, now, loc, upd):
+        """Works out home or away from the car's position (lock held). The position stays in memory."""
+        self.last_loc = (loc[0], loc[1], now)
+        if self.wc_plugged:
+            # plugged into the Wall Charger, so this is home
+            if not self.home_loc or self._dist_m(self.home_loc, loc) > 50:
+                first = not self.home_loc
+                self.home_loc = [round(loc[0], 5), round(loc[1], 5)]
+                if first:
+                    self.events_pending.append("Learned where the car charges at home (kept on the Pi only)")
+        if self.home_loc:
+            upd["home"] = self._dist_m(self.home_loc, loc) <= self.HOME_RADIUS_M
+
+    def _home_time(self, now, dt):
+        """Counts daytime hours the car is at home, so the Full charge card can learn home days."""
+        hr = time.localtime(now).tm_hour
+        if dt <= 0 or not 9 <= hr < 15:
+            return
+        home = True if self.wc_plugged else (self.vehicle or {}).get("home")
+        if home is None:
+            return
+        self.today["home_known_s"] = self.today.get("home_known_s", 0) + dt
+        if home:
+            self.today["home_s"] = self.today.get("home_s", 0) + dt
+
+    def _battery_in(self, now, key, val, prev, fast):
+        """Energy that reached the battery, from the car's AC or DC charging counters (lock held)."""
+        if prev is None or val < prev - 0.05:
+            delta = val if prev is not None else 0.0    # counter reset: a new charge started
+        else:
+            delta = max(0.0, val - prev)
+        if delta <= 0 or delta > 100:
+            return
+        self.today["batt_in_kwh"] = self.today.get("batt_in_kwh", 0.0) + delta
+        at_home = self.wc_plugged and key == "ac_in"
+        if at_home:
+            if self.session is not None:
+                self.session["batt_kwh"] = self.session.get("batt_kwh", 0.0) + delta
+            return
+        kind = "dc" if key == "dc_in" or fast else "ac"
+        if self.away is None:
+            self.away = {"start": now, "kind": kind, "kwh": 0.0, "last": now}
+            self.events_pending.append("Charging away from home (%s)" % ("fast charger" if kind == "dc" else "AC charger"))
+        self.away["kwh"] += delta
+        self.away["last"] = now
+        if kind == "dc":
+            self.away["kind"] = "dc"
+        self.today["away_kwh"] = self.today.get("away_kwh", 0.0) + delta
+
+    def _end_away(self, now):
+        a, self.away = self.away, None
+        if not a or a["kwh"] < 0.1:
+            return
+        price = (self.s.away_dc_price if a["kind"] == "dc" else self.s.away_ac_price)
+        kwh = round(a["kwh"], 2)
+        rec = {"start": int(a["start"]), "end": int(a["last"]), "kwh": kwh, "solar_kwh": 0.0, "grid_kwh": kwh,
+               "solar_pct": 0, "charge_min": int(round((a["last"] - a["start"]) / 60.0)),
+               "plugged_min": int(round((a["last"] - a["start"]) / 60.0)), "peak_kw": None,
+               "starts": 0, "stops": 0, "commands": 0, "modes": [], "cost": round(kwh * price, 2), "saved": 0.0,
+               "import_price": price, "feed_in_price": 0.0, "away": True, "kind": a["kind"]}
+        with self.lock:
+            self.sessions.append(rec)
+        self.store and self.store.save_sessions(self.sessions)
+        self.event("Away charging session: %.1f kWh at a %s charger, about $%.2f" %
+                   (kwh, "fast" if a["kind"] == "dc" else "public AC", rec["cost"]))
+
+    def _health_point(self, now, v, upd):
+        """Logs the pack's usable capacity once a day, from a reading near full (lock held)."""
+        if upd.get("energy_kwh") is None and upd.get("soc") is None:
+            return
+        soc, e = v.get("soc"), v.get("energy_kwh")
+        if soc is None or e is None or soc < 95:
+            return
+        day = time.strftime("%Y-%m-%d", time.localtime(now))
+        cur = self.health.get(day)
+        if cur and cur.get("soc", 0) > soc:
+            return
+        self.health[day] = {"cap": round(e / (soc / 100.0), 2), "soc": soc, "cell_mv": v.get("cell_mv")}
+        for old in sorted(self.health)[:-1100]:
+            del self.health[old]
+
+    def get_health(self):
+        with self.lock:
+            h = dict(self.health)
+        return [[d, h[d].get("cap"), h[d].get("cell_mv"), h[d].get("soc")] for d in sorted(h)]
 
     CAR_KEEP_S = 90 * 86400       # car history is kept for 90 days:
     CAR_FULL_S = 7 * 86400        # every reading for the last week, then
@@ -1658,6 +1857,27 @@ class Controller(object):
             out.append(row)
         return out
 
+    def _home_days(self):
+        """Weekdays the car is usually home during the day, learned from the last 8 weeks once there's
+        enough to go on; the configured days fill in any weekday without at least two days of data."""
+        with self.lock:
+            days = dict(self.days)
+            days[self.today_key] = dict(self.today)
+        seen, home = {}, {}
+        for key, t in days.items():
+            if t.get("home_known_s", 0) < 3 * 3600:
+                continue
+            wd = date(*map(int, key.split("-"))).weekday()
+            seen[wd] = seen.get(wd, 0) + 1
+            if t.get("home_s", 0) >= 4 * 3600:
+                home[wd] = home.get(wd, 0) + 1
+        known = [wd for wd in seen if seen[wd] >= 2]
+        if len(known) < 3:
+            return set(self.s.home_days), False
+        out = set(wd for wd in self.s.home_days if wd not in known)
+        out |= set(wd for wd in known if home.get(wd, 0) * 2 >= seen[wd])
+        return out, True
+
     def get_car_history(self, hours):
         with self.lock:
             h = list(self.car_history)
@@ -1675,6 +1895,7 @@ class Controller(object):
 
     def get_schedule(self):
         """When the next 100% charge is due, and the sunniest home day to do it."""
+        home_days, learned = self._home_days()
         now = self.clock()
         today = datetime.fromtimestamp(now).date()
         with self.lock:
@@ -1695,7 +1916,7 @@ class Controller(object):
             if d == today and self._day_over(f, now):
                 continue    # the sun has set, so today can't be the full charge day any more
             item = dict(f)
-            item["home"] = d.weekday() in self.s.home_days
+            item["home"] = d.weekday() in home_days
             item["due"] = due is not None and d.toordinal() == due
             days.append(item)
         # pick the sunniest home day on or before the due date (or the first week if overdue/unknown)
@@ -1723,6 +1944,7 @@ class Controller(object):
             "forecast_error": self.forecast.error if self.forecast else "off",
             "best": best,
             "best_late": late,
+            "home_learned": learned,
             "today": today.strftime("%Y-%m-%d"),
         }
 
@@ -1851,6 +2073,9 @@ class Controller(object):
             "saved": round(skwh * (ip - fp), 2),
             "import_price": ip,
             "feed_in_price": fp,
+            # energy that reached the battery, from the car, and how much of the delivered energy that was
+            "batt_kwh": round(ss["batt_kwh"], 2) if ss.get("batt_kwh") else None,
+            "eff_pct": int(round(100.0 * ss["batt_kwh"] / kwh)) if ss.get("batt_kwh") and kwh > 0.5 else None,
         }
 
     def get_sessions(self):
@@ -1913,6 +2138,18 @@ class Controller(object):
             self.today = self._blank_today()
             self.cloud_cap_noted = False
 
+    @staticmethod
+    def _wh_per_km(t):
+        """Energy used per km for a day: battery at the start, plus charged in, less battery at the end."""
+        try:
+            km = t["odo_end"] - t["odo_start"]
+            used = t["e_start"] + t.get("batt_in_kwh", 0.0) - t["e_end"]
+        except (KeyError, TypeError):
+            return None
+        if km < 5 or used <= 0:
+            return None
+        return int(round(used * 1000.0 / km))
+
     def _archive_pending(self, now):
         """Writes every finished day not yet archived: minute data and the daily totals."""
         yday = datetime.fromtimestamp(now).date() - timedelta(days=1)
@@ -1954,6 +2191,13 @@ class Controller(object):
                 odo = t.get("odo_end")
                 driven = (odo - t["odo_start"]) if odo is not None and t.get("odo_start") is not None else None
                 tp = ",".join("" if v is None else str(v) for v in tyres.get(key, [None] * 4))
+                hp = self.health.get(key) or {}
+                whkm = self._wh_per_km(t)
+                tp += ",%s,%s,%s,%s,%s,%s" % (
+                    hp.get("cap", ""), "" if hp.get("cell_mv") is None else hp["cell_mv"],
+                    "%.2f" % t["batt_in_kwh"] if t.get("batt_in_kwh") else "",
+                    whkm if whkm is not None else "", "%.2f" % t["away_kwh"] if t.get("away_kwh") else "",
+                    "%.1f" % (t["home_s"] / 3600.0) if t.get("home_s") else "")
                 self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s,%s,%s\n" % (
                     key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
                     t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
@@ -1979,6 +2223,9 @@ class Controller(object):
             "vehicle": self.vehicle,
             "car_history": list(self.car_history),
             "tyre_days": self.tyre_days,
+            "health": self.health,
+            "home_loc": self.home_loc,
+            "away": self.away,
             "archived_through": self.archived_through,
             "saved": now,
         })
@@ -2115,6 +2362,8 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 hours = 168
             self._json(c.get_car_history(hours))
+        elif u.path == "/api/health":
+            self._json(c.get_health())
         elif u.path == "/api/tyres":
             q = parse_qs(u.query)
             try:
@@ -2296,6 +2545,11 @@ def main():
         log.warning("Teslemetry token or VIN missing, commands will fail")
 
     if args.simulate:
+        # a year of made up battery health: capacity easing down slowly, cells kept balanced
+        for i in range(365, 0, -3):
+            day = time.strftime("%Y-%m-%d", time.localtime(clock() - i * 86400))
+            ctl.health[day] = {"cap": round(58.9 - (365 - i) * 0.0035 + random.uniform(-0.25, 0.25), 2), "soc": 100,
+                               "cell_mv": random.randint(12, 26) if i % 21 else random.randint(35, 55)}
         # a month of made up tyre history, with the rear right slowly losing air
         for i in range(30, 0, -1):
             day = time.strftime("%Y-%m-%d", time.localtime(clock() - i * 86400))
@@ -2320,6 +2574,16 @@ def main():
                                     "tp_fr": round(40.9 + warm, 1), "tp_rl": round(41.0 + warm, 1),
                                     "tp_rr": round(38.6 + warm - 0.02 * (hr - 9), 1), "tp_t": time.time(),
                                     "speed_kmh": random.randint(40, 105) if driving else 0})
+                # battery health, security, home and software, made up
+                # energy into the battery this charge, following the made up battery level
+                fake_stream.soc0 = getattr(fake_stream, "soc0", cs["soc"])
+                fake_stream.ac = max(getattr(fake_stream, "ac", 0.0), (cs["soc"] - fake_stream.soc0) / 100.0 * 57.6)
+                ctl.vehicle_update({"energy_kwh": round(cs["soc"] / 100.0 * 57.6, 2),
+                                    "brick_max": 3.342, "brick_min": 3.326, "locked": hr < 7 or hr >= 18,
+                                    "doors_open": [], "win_fd": "Closed", "win_fp": "Closed", "win_rd": "Closed",
+                                    "win_rp": "PartiallyOpen" if 12 <= hr < 14 else "Closed", "sentry": "Off",
+                                    "_loc": (-27.6012, 151.9431), "ac_in": round(fake_stream.ac, 3),
+                                    "version": "2026.38.6", "update_version": "2026.44.1"})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True
