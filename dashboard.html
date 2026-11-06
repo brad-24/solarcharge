@@ -352,10 +352,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 @media (max-width: 600px) { .wxtoday { text-align: left; width: 100%; } }
 .wxnote a { color: inherit; }
 
-/* ---- views: the car charts live on /car, everything else on / */
-.wrap.v-main > .carview { display: none; }
-.wrap.v-car > *:not(header):not(.carview):not(footer) { display: none !important; }
-
 /* ---- car status, notices and battery health */
 .cstat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 @media (max-width: 760px) { .cstat { grid-template-columns: 1fr 1fr; } }
@@ -373,13 +369,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 #carstats[hidden] { display: none; }
 .subhead { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
 .subh { font-size: 12px; font-weight: 600; color: var(--text-3); margin: 0; letter-spacing: .06em; text-transform: uppercase; }
+nav a[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav"><a href="/" id="nav-dash">Dashboard</a><a href="/car" id="nav-car">Car</a><a href="/sessions">Sessions</a></nav>
+    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a><a href="#" id="nav-tt" hidden>TeslaTrack</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
@@ -414,7 +411,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="card">
       <h2>Status</h2>
       <div class="reason" id="reason">Loading</div>
-      <div class="notices" id="notices"></div>
       <div class="modes" id="modes">
         <button type="button" data-mode="manual">Manual</button>
         <button type="button" data-mode="solar">Solar</button>
@@ -505,112 +501,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
   </section>
 
-  <section class="card carview" style="margin-bottom:14px">
-    <h2>Car status</h2>
-    <div class="notices" id="car-notices"></div>
-    <div class="cstat">
-      <div class="cs"><div class="l">Locks</div><div class="v sm" id="st-lock"></div></div>
-      <div class="cs"><div class="l">Doors</div><div class="v sm" id="st-doors"></div></div>
-      <div class="cs"><div class="l">Windows</div><div class="v sm" id="st-win"></div></div>
-      <div class="cs"><div class="l">Sentry</div><div class="v sm" id="st-sentry"></div></div>
-      <div class="cs"><div class="l">Location</div><div class="v sm" id="st-where"></div></div>
-      <div class="cs"><div class="l">Efficiency</div><div class="v sm" id="st-eff"></div></div>
-      <div class="cs"><div class="l">Charging losses</div><div class="v sm" id="st-loss"></div></div>
-      <div class="cs"><div class="l">Software</div><div class="v sm" id="st-sw"></div></div>
-    </div>
-    <div class="cstat" id="carstats" hidden>
-      <div class="cs"><div class="l">Range</div><div class="v" id="cs-range"></div></div>
-      <div class="cs"><div class="l">Odometer</div><div class="v" id="cs-odo"></div></div>
-      <div class="cs"><div class="l">Driven today</div><div class="v" id="cs-driven"></div></div>
-      <div class="cs"><div class="l">Tyres <span id="cs-tpt"></span></div><div class="v tyres" id="cs-tyres"></div></div>
-    </div>
-    <div class="chartnote" id="st-note">Fills in as the car reports. Location is only used on the Pi to tell home from away.</div>
-  </section>
-
-  <section class="card carview" style="margin-bottom:14px">
-    <h2>Battery</h2>
-    <div class="charthead">
-      <h3 class="subh">Level</h3>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--s-car)"></span>Battery <b id="cl-soc"></b></span>
-      </div>
-      <div class="range trange" data-for="car">
-        <button type="button" data-h="24" class="on">24 h</button>
-        <button type="button" data-h="72">3 d</button>
-        <button type="button" data-h="168">7 d</button>
-        <button type="button" data-h="720">30 d</button>
-        <button type="button" data-h="2160">90 d</button>
-      </div>
-    </div>
-    <div class="chart short" id="cchart"><div class="tip" id="ctip"></div></div>
-
-    <div class="chartnote" id="cnote">The car only reports while it's awake, so gaps are normal while it sleeps.</div>
-      <div class="charthead subhead">
-      <h3 class="subh">Health</h3>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--s-car)"></span>Usable capacity</span>
-        <span><span class="swatch dashed" style="--dash:var(--s-cabin)"></span>Cell spread</span>
-      </div>
-      <div class="range" id="hrange">
-        <button type="button" data-d="90">90 d</button>
-        <button type="button" data-d="365" class="on">1 y</button>
-        <button type="button" data-d="0">All</button>
-      </div>
-    </div>
-    <div class="carstats hstats">
-      <div class="cs"><div class="l">Usable capacity</div><div class="v" id="hs-cap"></div></div>
-      <div class="cs"><div class="l">Change since first</div><div class="v" id="hs-change"></div></div>
-      <div class="cs"><div class="l">Cell balance</div><div class="v" id="hs-cell"></div></div>
-      <div class="cs"><div class="l">In the battery now</div><div class="v" id="hs-now"></div></div>
-    </div>
-    <div class="chart short" id="hchart"><div class="tip" id="htip"></div></div>
-    <div class="chartnote">Usable capacity is estimated once a day from a reading at 95% or more, so it fills in with each full charge.
-      Cell spread is the gap between the highest and lowest cell voltages; under about 30 mV is well balanced.</div>
-    </section>
-
-  <section class="card carview" style="margin-bottom:14px">
-    <div class="charthead">
-      <h2>Temps</h2>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--s-cabin)"></span>Cabin <b id="tl-cabin"></b></span>
-        <span><span class="swatch" style="background:var(--s-outside)"></span>Outside <b id="tl-out"></b></span>
-      </div>
-      <div class="range trange" data-for="temps">
-        <button type="button" data-h="24" class="on">24 h</button>
-        <button type="button" data-h="72">3 d</button>
-        <button type="button" data-h="168">7 d</button>
-        <button type="button" data-h="720">30 d</button>
-        <button type="button" data-h="2160">90 d</button>
-      </div>
-    </div>
-    <div class="chart short" id="tchart"><div class="tip" id="ttip"></div></div>
-    <div class="chartnote" id="tnote"></div>
-  </section>
-
-
-
-  <section class="card carview" style="margin-bottom:14px">
-    <div class="charthead">
-      <h2>Tyres</h2>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--t-left)"></span>FL <b id="yl-fl"></b></span>
-        <span><span class="swatch" style="background:var(--t-right)"></span>FR <b id="yl-fr"></b></span>
-        <span><span class="swatch dashed" style="--dash:var(--t-left)"></span>RL <b id="yl-rl"></b></span>
-        <span><span class="swatch dashed" style="--dash:var(--t-right)"></span>RR <b id="yl-rr"></b></span>
-      </div>
-      <div class="range" id="yrange">
-        <button type="button" data-d="3">3 d</button>
-        <button type="button" data-d="7">7 d</button>
-        <button type="button" data-d="30" class="on">30 d</button>
-        <button type="button" data-d="90">90 d</button>
-      </div>
-    </div>
-    <div class="chart short" id="ychart"><div class="tip" id="ytip"></div></div>
-    <div class="chartnote" id="ynote"></div>
-  </section>
-
-
-
   <section class="grid bottom">
     <div class="card">
       <h2>Recent events</h2>
@@ -619,7 +509,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     <div class="card">
       <h2>Daily totals</h2>
       <table>
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th><th>Driven km</th><th>Top km/h</th></tr></thead>
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th></tr></thead>
         <tbody id="days"></tbody>
       </table>
       <div class="exports" id="exports"></div>
@@ -629,13 +519,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 </div>
 
 <script>
-  // one page, two views: /car shows the car charts, / shows everything else
-  (function () {
-    var car = location.pathname === "/car";
-    document.getElementById("wrap").classList.add(car ? "v-car" : "v-main");
-    document.getElementById(car ? "nav-car" : "nav-dash").classList.add("on");
-    if (car) document.title = "Car \u00b7 SolarCharge";
-  })();
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
@@ -722,8 +605,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
       : !ch.plugged ? (veh && veh.home === false ? "Away from home" : "Not plugged in") : ch.charging ? ch.amps.toFixed(0) + " A" + timeToLimit(s, veh, car)
       : (veh && veh.limit && soc !== null && soc >= veh.limit) ? "Charged to " + veh.limit + "% limit" : "Plugged in, not charging");
     setText("s-carrange", veh && veh.range_km !== undefined && veh.range_km !== null ? veh.range_km + " km range" : "");
-    renderCarStats(veh);
-    renderCarStatus(s);
     if (inv.ok) {
       setText("s-grid", svgkw(inv.grid));
       setText("s-gridsub", inv.grid < -30 ? "Exporting" : inv.grid > 30 ? "Importing" : "");
@@ -743,7 +624,15 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
   }
 
+  function ttLink(port) {
+    var a = $("nav-tt");
+    if (!port) { a.hidden = true; return; }
+    a.hidden = false;
+    a.href = location.protocol + "//" + location.hostname + ":" + port + "/";
+  }
+
   function render(s) {
+    ttLink(s.teslatrack_port);
     state = s;
     var pill = $("runpill");
     var age = Date.now() / 1000 - (s.simulated ? Date.now() / 1000 : s.time);
@@ -826,19 +715,13 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   }
   function pollDays() {
     fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
-      daysData = d;
       var keys = Object.keys(d).sort().reverse().slice(0, 14);
       $("days").innerHTML = keys.map(function (k) {
         var x = d[k], car = x.car_wh / 1000, share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
         var dt = new Date(k + "T12:00:00");
         var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        var km = x.odo_end !== undefined && x.odo_start !== undefined ? (x.odo_end - x.odo_start) : null;
-        if (k === keys[0]) { drivenToday = km; topToday = x.top_kmh || null; }
-        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) +
-          "</td><td>" + (km !== null ? km.toFixed(0) : "<span class='muted'>n/a</span>") +
-          "</td><td>" + (x.top_kmh ? x.top_kmh : "<span class='muted'>n/a</span>") + "</td></tr>";
-      }).join("") || "<tr><td colspan='7' class='muted'>No data yet</td></tr>";
-      if (state && state.tesla) renderCarStats(state.tesla.vehicle);
+        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
+      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
     }).catch(function () {});
   }
 
@@ -992,523 +875,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     hit.addEventListener("mouseleave", leave);
     hit.addEventListener("touchend", leave);
   }
-  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { drawChart(); drawTele(TEMPS); drawTele(CAR); drawTyres(); drawHealth(); }, 150); });
-
-  // ---- car telemetry charts (TEMPS and CAR), drawn from the same history
-  // history points: [time, battery %, cabin C, outside C, range km, FL, FR, RL, RR psi]
-  var carHist = [], carHours = 24, drivenToday = null, topToday = null;
-  var GAP = 1800;   // more than 30 minutes without a reading: the car was asleep, so break the line
-  var deg = function (v) { return v.toFixed(1) + "°C"; };
-  var psi = function (v) { return v.toFixed(1) + " psi"; };
-  var TEMPS = {
-    box: "tchart", tip: "ttip", label: "Cabin and outside temperature",
-    left: { unit: "°", min: 5, step: 5, span: 20 },
-    series: [
-      { key: 2, name: "Cabin", color: "--s-cabin", axis: "left", fmt: deg },
-      { key: 3, name: "Outside", color: "--s-outside", axis: "left", fmt: deg }
-    ],
-    empty: "Fills in as the car reports its cabin and outside temperature"
-  };
-  var CAR = {
-    box: "cchart", tip: "ctip", label: "Battery level and tyre pressures",
-    left: { unit: "%", fixed: [0, 100] },
-    series: [
-      { key: 1, name: "Battery", color: "--s-car", axis: "left", join: true, fmt: function (v) { return Math.round(v) + "%"; } }
-    ],
-    empty: "Fills in as the car reports its battery level"
-  };
-
-  function pollCar() {
-    fetch("/api/carhistory?hours=" + Math.max(carHours, 168), { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (h) { carHist = h || []; drawTele(TEMPS); drawTele(CAR); carLegend(); }).catch(function () {});
-  }
-  document.querySelectorAll(".trange").forEach(function (el) {
-    el.addEventListener("click", function (e) {
-      var b = e.target.closest("button");
-      if (!b) return;
-      carHours = parseInt(b.getAttribute("data-h"), 10);
-      // both charts share the period
-      document.querySelectorAll(".trange button").forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-h") === String(carHours)); });
-      drawTele(TEMPS); drawTele(CAR);
-      if (carHours > 168) pollCar();   // the longer periods are fetched when asked for
-    });
-  });
-  function lastOf(key) {
-    for (var i = carHist.length - 1; i >= 0; i--) if (carHist[i][key] !== null && carHist[i][key] !== undefined) return carHist[i];
-    return null;
-  }
-  function when(t) {
-    return Date.now() / 1000 - t < 86400 ? hm(t) : new Date(t * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " " + hm(t);
-  }
-  function carLegend() {
-    var ls = lastOf(1), lc = lastOf(2), lo = lastOf(3);
-    $("cl-soc").textContent = ls ? Math.round(ls[1]) + "%" : "";
-    $("tl-cabin").textContent = lc ? deg(lc[2]) : "";
-    $("tl-out").textContent = lo ? deg(lo[3]) : "";
-    var tlast = Math.max(lc ? lc[0] : 0, lo ? lo[0] : 0);
-    $("tnote").textContent = (tlast ? "Last reading " + when(tlast) + ". " : "") + "The car only reports while it's awake, so gaps are normal while it sleeps.";
-    var clast = ls ? ls[0] : 0;
-    $("cnote").textContent = (clast ? "Last reading " + when(clast) + ". " : "") + "While the car sleeps, the line holds its last reported level.";
-  }
-  function niceRange(vals, ax) {
-    if (ax.fixed) return ax.fixed;
-    var lo = Infinity, hi = -Infinity;
-    vals.forEach(function (v) { lo = Math.min(lo, v); hi = Math.max(hi, v); });
-    if (lo === Infinity) { lo = ax.unit === "°" ? 15 : 36; hi = lo + ax.span; }
-    lo = Math.floor(lo / ax.step) * ax.step; hi = Math.ceil(hi / ax.step) * ax.step;
-    if (hi - lo < ax.span) { var mid = (lo + hi) / 2; lo = Math.floor((mid - ax.span / 2) / ax.step) * ax.step; hi = lo + ax.span; }
-    // four even gridlines
-    var q = Math.ceil((hi - lo) / 4 / ax.step) * ax.step; hi = lo + q * 4;
-    return [lo, hi];
-  }
-
-  // x axis labels for a time range: hours for a day, weekdays for up to a week, dates beyond
-  function timeLabels(from, now, x, H, iw) {
-    var span = now - from, out = "", tz = new Date().getTimezoneOffset() * 60, d, t;
-    if (span > 120 * 86400) {
-      // months: every month, or every 2 or 3 when the range is long or the chart narrow
-      var months = span / (30 * 86400), stepM = Math.max(1, Math.ceil(months / (iw < 420 ? 4 : 9)));
-      var m = new Date(from * 1000); m = new Date(m.getFullYear(), m.getMonth() + 1, 1);
-      for (; m.getTime() / 1000 <= now; m = new Date(m.getFullYear(), m.getMonth() + stepM, 1)) {
-        t = m.getTime() / 1000;
-        out += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" +
-          m.toLocaleDateString([], m.getMonth() === 0 ? { month: "short", year: "2-digit" } : { month: "short" }) + "</text>";
-      }
-      return out;
-    }
-    if (span > 8 * 86400) {
-      var every = span > 40 * 86400 ? (iw < 420 ? 30 : 15) : (iw < 420 ? 10 : 5);
-      var day0 = Math.ceil((from - tz) / 86400) * 86400 + tz;
-      for (t = day0 + Math.floor((now - day0) / 86400) % every * 86400; t <= now; t += every * 86400) {
-        out += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" +
-          new Date(t * 1000).toLocaleDateString([], { day: "numeric", month: "short" }) + "</text>";
-      }
-      return out;
-    }
-    var stepH = span <= 86400 ? 3 : span <= 3 * 86400 ? 12 : 24;
-    if (iw < 420) stepH *= 2;
-    var step = stepH * 3600;
-    for (t = Math.ceil((from - tz) / step) * step + tz; t <= now; t += step) {
-      d = new Date(t * 1000);
-      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
-      out += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
-    }
-    return out;
-  }
-
-  function drawTele(cfg) {
-    var box = $(cfg.box), tip = $(cfg.tip);
-    if (!box.clientWidth) return;   // not on this view
-    var old = box.querySelector("svg"); if (old) old.remove();
-    var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
-    var now = state ? state.time : Date.now() / 1000;
-    var from = now - carHours * 3600;
-    var has = function (p, k) { return p[k] !== null && p[k] !== undefined; };
-    var pts = carHist.filter(function (p) { return p[0] >= from && cfg.series.some(function (s) { return has(p, s.key); }); });
-    if (!pts.length) {
-      var e = document.createElement("div"); e.className = "empty";
-      e.textContent = carHist.length ? "No readings in this period" : cfg.empty;
-      box.appendChild(e); return;
-    }
-    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = cfg.right ? 46 : 14, mt = 10, mb = 26;
-    var iw = W - ml - mr, ih = H - mt - mb;
-    var vals = { left: [], right: [] };
-    pts.forEach(function (p) { cfg.series.forEach(function (s) { if (has(p, s.key)) vals[s.axis].push(p[s.key]); }); });
-    var rL = niceRange(vals.left, cfg.left), rR = cfg.right ? niceRange(vals.right, cfg.right) : null;
-    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
-    var yOf = function (s, v) { var r = s.axis === "left" ? rL : rR; return mt + ih - (v - r[0]) / (r[1] - r[0]) * ih; };
-    var NS = "http://www.w3.org/2000/svg";
-    var svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", cfg.label + " over the last " + carHours + " hours");
-    var html = "<g class='axis'>";
-    for (var i = 0; i <= 4; i++) {
-      var yy = mt + ih - ih * i / 4;
-      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
-      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + Math.round(rL[0] + (rL[1] - rL[0]) * i / 4) + cfg.left.unit + "</text>";
-      if (rR) html += "<text x='" + (W - mr + 8) + "' y='" + (yy + 4) + "'>" + Math.round(rR[0] + (rR[1] - rR[0]) * i / 4) + cfg.right.unit + "</text>";
-    }
-    if (rR) html += "<text x='" + (W - 2) + "' y='" + (mt + ih + 18) + "' text-anchor='end'>psi</text>";
-    html += timeLabels(from, now, x, H, iw) + "</g>";
-    var gap = carHours > 168 ? 3 * 3600 : GAP;   // older readings are half hourly, so allow longer gaps
-    cfg.series.forEach(function (s) {
-      var sp = pts.filter(function (p) { return has(p, s.key); });
-      var d = "", seg = [], dots = "";
-      if (s.join && sp.length) {
-        // battery barely changes while parked: hold each reading until the next one, as steps
-        d = "M" + x(sp[0][0]).toFixed(1) + "," + yOf(s, sp[0][s.key]).toFixed(1);
-        for (var j = 1; j < sp.length; j++) {
-          d += "H" + x(sp[j][0]).toFixed(1) + "V" + yOf(s, sp[j][s.key]).toFixed(1);
-        }
-        html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>";
-        return;
-      }
-      var flush = function () {
-        if (seg.length === 1) dots += "<circle r='2.5' cx='" + x(seg[0][0]).toFixed(1) + "' cy='" + yOf(s, seg[0][s.key]).toFixed(1) + "' style='fill:var(" + s.color + ")'/>";
-        else if (seg.length > 1) d += "M" + seg.map(function (q) { return x(q[0]).toFixed(1) + "," + yOf(s, q[s.key]).toFixed(1); }).join("L");
-        seg = [];
-      };
-      for (var i = 0; i < sp.length; i++) {
-        if (i > 0 && sp[i][0] - sp[i - 1][0] > gap) flush();
-        seg.push(sp[i]);
-      }
-      flush();
-      html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")" + (s.dash ? ";stroke-dasharray:5 4" : "") + "'/>" + dots;
-    });
-    html += "<line class='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
-    cfg.series.forEach(function (s, k) { html += "<circle class='dot' data-k='" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
-    html += "<rect class='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
-    svg.innerHTML = html;
-    box.insertBefore(svg, tip);
-
-    var hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross"), dotsEl = svg.querySelectorAll(".dot");
-    function lastWith(key) {
-      for (var j = pts.length - 1; j >= 0; j--) if (has(pts[j], key)) return pts[j][0];
-      return 0;
-    }
-    function nearest(key, t, join) {
-      if (join) {
-        // the reading in force at that time: the last one at or before it
-        var held = null;
-        for (var j = 0; j < pts.length; j++) { if (pts[j][0] > t) break; if (has(pts[j], key)) held = pts[j]; }
-        if (held) return held;
-      }
-      var best = null, bd = Infinity;
-      for (var i = 0; i < pts.length; i++) {
-        if (!has(pts[i], key)) continue;
-        var dd = Math.abs(pts[i][0] - t); if (dd < bd) { bd = dd; best = pts[i]; }
-      }
-      return bd <= gap ? best : null;
-    }
-    function move(ev) {
-      var r = svg.getBoundingClientRect();
-      var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-      var t = from + (cx - ml) / iw * (now - from);
-      var rows = "", anyT = null;
-      cfg.series.forEach(function (s, k) {
-        var p = nearest(s.key, t, s.join), c = dotsEl[k];
-        if (p) {
-          var at = s.join && t > p[0] && t <= lastWith(s.key) ? t : p[0];   // a held value sits under the pointer
-          if (anyT === null) anyT = at;
-          c.setAttribute("cx", x(at)); c.setAttribute("cy", yOf(s, p[s.key])); c.style.display = "";
-          rows += "<div class='r'><span class='swatch" + (s.dash ? " dashed' style='--dash:var(" + s.color + ")" : "' style='background:var(" + s.color + ")") + "'></span>" + s.name + "<b>" + s.fmt(p[s.key]) + "</b></div>";
-        } else c.style.display = "none";
-      });
-      if (anyT === null) { leave(); return; }
-      var px = x(anyT);
-      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      tip.innerHTML = "<div class='t'>" + (carHours > 168 ? new Date(anyT * 1000).toLocaleDateString([], { day: "numeric", month: "short" }) + " "
-        : carHours > 24 ? new Date(anyT * 1000).toLocaleDateString([], { weekday: "short" }) + " " : "") + hm(anyT) + "</div>" + rows;
-      tip.style.display = "block";
-      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
-      tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
-    }
-    function leave() {
-      tip.style.display = "none"; cross.style.display = "none";
-      dotsEl.forEach(function (c) { c.style.display = "none"; });
-    }
-    hit.addEventListener("mousemove", move);
-    hit.addEventListener("touchstart", move, { passive: true });
-    hit.addEventListener("touchmove", move, { passive: true });
-    hit.addEventListener("mouseleave", leave);
-    hit.addEventListener("touchend", leave);
-  }
-
-  // ---- tyres: every reading for 3 or 7 days, one average per day for 30 or 90 days; lines join across gaps
-  var tyreRows = [], tyreRaw = [], tyreDays = 30;
-  var TYRES = [
-    { i: 1, name: "FL", color: "--t-left" }, { i: 2, name: "FR", color: "--t-right" },
-    { i: 3, name: "RL", color: "--t-left", dash: true }, { i: 4, name: "RR", color: "--t-right", dash: true }
-  ];
-  function pollTyres() {
-    fetch("/api/tyres?days=90", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (rows) { tyreRows = rows || []; drawTyres(); }).catch(function () {});
-    fetch("/api/carhistory?hours=168", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (h) {
-        tyreRaw = (h || []).filter(function (p) { return p.length > 5 && [5, 6, 7, 8].some(function (k) { return p[k] !== null && p[k] !== undefined; }); })
-          .map(function (p) { return [p[0], p[5], p[6], p[7], p[8]].map(function (v) { return v === undefined ? null : v; }); });
-        drawTyres();
-      }).catch(function () {});
-  }
-  $("yrange").addEventListener("click", function (e) {
-    var b = e.target.closest("button");
-    if (!b) return;
-    tyreDays = parseInt(b.getAttribute("data-d"), 10);
-    var all = $("yrange").querySelectorAll("button");
-    for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
-    drawTyres();
-  });
-  function drawTyres() {
-    var box = $("ychart"), tip = $("ytip");
-    if (!box.clientWidth) return;   // not on this view
-    var old = box.querySelector("svg"); if (old) old.remove();
-    var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
-    var raw = tyreDays <= 7;
-    $("ynote").textContent = (raw ? "Every reading, in psi." : "Average pressure each day, in psi.") +
-      " Pressures rise a few psi as tyres warm up while driving; watch for one tyre drifting away from the others.";
-    // rows as [time, FL, FR, RL, RR]; daily averages are placed at midday
-    var now = state ? state.time : Date.now() / 1000, from, rows;
-    if (raw) {
-      from = now - tyreDays * 86400;
-      rows = tyreRaw.filter(function (r) { return r[0] >= from; });
-    } else {
-      var nd = new Date(now * 1000); nd.setHours(0, 0, 0, 0);
-      from = nd.getTime() / 1000 - (tyreDays - 1) * 86400;
-      now = from + tyreDays * 86400;
-      rows = tyreRows.map(function (r) { return [new Date(r[0] + "T12:00:00").getTime() / 1000].concat(r.slice(1)); })
-        .filter(function (r) { return r[0] >= from; });
-    }
-    TYRES.forEach(function (t) {
-      var src = raw ? tyreRaw : tyreRows, last = null;
-      src.forEach(function (r) { if (r[t.i] !== null) last = r[t.i]; });
-      $("yl-" + t.name.toLowerCase()).textContent = last !== null ? last.toFixed(1) : "";
-    });
-    if (!rows.length) {
-      var e = document.createElement("div"); e.className = "empty";
-      e.textContent = (raw ? tyreRaw : tyreRows).length ? "No tyre readings in this period" : "Fills in as the car reports its tyre pressures, mostly while driving";
-      box.appendChild(e); return;
-    }
-    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 14, mt = 10, mb = 26;
-    var iw = W - ml - mr, ih = H - mt - mb;
-    var vals = [];
-    rows.forEach(function (r) { for (var i = 1; i <= 4; i++) if (r[i] !== null) vals.push(r[i]); });
-    var lo = Math.floor(Math.min.apply(null, vals) - 1), hi = Math.ceil(Math.max.apply(null, vals) + 1);
-    if (hi - lo < 8) { var mid = (lo + hi) / 2; lo = Math.floor(mid - 4); hi = lo + 8; }
-    var q = Math.ceil((hi - lo) / 4); hi = lo + q * 4;
-    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
-    var y = function (v) { return mt + ih - (v - lo) / (hi - lo) * ih; };
-    var html = "<g class='axis'>";
-    for (var i = 0; i <= 4; i++) {
-      var v = lo + q * i, yy = y(v);
-      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
-      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + v + "</text>";
-    }
-    html += timeLabels(from, now, x, H, iw) + "</g>";
-    var dotR = raw && rows.length > 60 ? 1.5 : 2.5;
-    TYRES.forEach(function (t) {
-      var pts = rows.filter(function (r) { return r[t.i] !== null; });
-      if (!pts.length) return;
-      var d = "M" + pts.map(function (r) { return x(r[0]).toFixed(1) + "," + y(r[t.i]).toFixed(1); }).join("L");
-      html += "<path class='line' d='" + d + "' style='stroke:var(" + t.color + ")" + (t.dash ? ";stroke-dasharray:5 4" : "") + "'/>";
-      html += pts.map(function (r) { return "<circle r='" + dotR + "' cx='" + x(r[0]).toFixed(1) + "' cy='" + y(r[t.i]).toFixed(1) + "' style='fill:var(" + t.color + ")'/>"; }).join("");
-    });
-    html += "<line class='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
-    html += "<rect class='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
-    var NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "Tyre pressures over the last " + tyreDays + " days");
-    svg.innerHTML = html;
-    box.insertBefore(svg, tip);
-    var hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross");
-    function move(ev) {
-      var r = svg.getBoundingClientRect();
-      var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-      var t = from + (cx - ml) / iw * (now - from), best = null, bd = Infinity;
-      rows.forEach(function (row) { var dd = Math.abs(row[0] - t); if (dd < bd) { bd = dd; best = row; } });
-      if (!best) return;
-      var px = x(best[0]);
-      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      var dt = new Date(best[0] * 1000);
-      tip.innerHTML = "<div class='t'>" + dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + (raw ? " " + hm(best[0]) : "") + "</div>" +
-        TYRES.map(function (tt) {
-          return "<div class='r'><span class='swatch" + (tt.dash ? " dashed' style='--dash:var(" + tt.color + ")" : "' style='background:var(" + tt.color + ")") + "'></span>" + tt.name +
-            "<b>" + (best[tt.i] !== null ? best[tt.i].toFixed(1) + " psi" : "n/a") + "</b></div>";
-        }).join("");
-      tip.style.display = "block";
-      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
-      tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
-    }
-    function leave() { tip.style.display = "none"; cross.style.display = "none"; }
-    hit.addEventListener("mousemove", move);
-    hit.addEventListener("touchstart", move, { passive: true });
-    hit.addEventListener("touchmove", move, { passive: true });
-    hit.addEventListener("mouseleave", leave);
-    hit.addEventListener("touchend", leave);
-  }
-
-  function renderCarStats(veh) {
-    if (!veh) return;
-    var has = function (k) { return veh[k] !== undefined && veh[k] !== null; };
-    var tyres = ["tp_fl", "tp_fr", "tp_rl", "tp_rr"];
-    if (!has("range_km") && !has("odo_km") && !tyres.some(has)) return;
-    $("carstats").hidden = false;
-    $("cs-range").innerHTML = has("range_km") ? veh.range_km + "<small>km</small>" : "<span class='muted'>n/a</span>";
-    $("cs-odo").innerHTML = has("odo_km") ? Math.round(veh.odo_km).toLocaleString() + "<small>km</small>" : "<span class='muted'>n/a</span>";
-    $("cs-driven").innerHTML = (drivenToday !== null ? drivenToday.toFixed(0) + "<small>km</small>" : "<span class='muted'>n/a</span>") +
-      (topToday ? "<div class='sub2'>top speed " + topToday + " km/h</div>" : "");
-    if (tyres.some(has)) {
-      var vals = tyres.map(function (k) { return has(k) ? veh[k] : null; });
-      var top = Math.max.apply(null, vals.filter(function (v) { return v !== null; }));
-      var names = ["FL", "FR", "RL", "RR"];
-      // flag a tyre that's under 36 psi or 4 psi below the others
-      $("cs-tyres").innerHTML = vals.map(function (v, i) {
-        var tag = "<small class='pos'>" + names[i] + "</small>";
-        if (v === null) return "<span>" + tag + "<span class='muted'>n/a</span></span>";
-        return "<span" + (v < 36 || top - v >= 4 ? " class='low' title='Lower than the others'" : "") + ">" + tag + Math.round(v) + "</span>";
-      }).join("");
-      $("cs-tpt").textContent = "psi" + (veh.tp_t ? ", " + (Date.now() / 1000 - veh.tp_t < 86400 ? hm(veh.tp_t)
-        : new Date(veh.tp_t * 1000).toLocaleDateString([], { day: "numeric", month: "short" })) : "");
-    } else $("cs-tyres").innerHTML = "<span class='muted'>n/a</span>";
-  }
-
-  // ---- car status, notices and battery health
-  var daysData = {}, healthRows = [], healthDays = 365, wxRain12 = null;
-  var WIN = { win_fd: "front left", win_fp: "front right", win_rd: "rear left", win_rp: "rear right" };
-  var DOOR = { DriverFront: "front left", PassengerFront: "front right", DriverRear: "rear left", PassengerRear: "rear right",
-               TrunkFront: "frunk", TrunkRear: "boot" };
-  function openWindows(v) {
-    return Object.keys(WIN).filter(function (k) { return v[k] && v[k] !== "Closed" && v[k] !== "Unknown"; })
-      .map(function (k) { return WIN[k] + (v[k] === "PartiallyOpen" ? " (partly)" : ""); });
-  }
-  function avgWhKm(days) {
-    var used = 0, km = 0;
-    Object.keys(daysData).sort().reverse().slice(0, days).forEach(function (k) {
-      var t = daysData[k];
-      if (t.odo_end === undefined || t.odo_start === undefined || t.e_start === undefined || t.e_end === undefined) return;
-      var dk = t.odo_end - t.odo_start, u = t.e_start + (t.batt_in_kwh || 0) - t.e_end;
-      if (dk >= 5 && u > 0) { used += u; km += dk; }
-    });
-    return km >= 5 ? Math.round(used * 1000 / km) : null;
-  }
-  function renderCarStatus(s) {
-    var v = (s.tesla && s.tesla.vehicle) || {}, has = function (k) { return v[k] !== undefined && v[k] !== null; };
-    var dim = function (t) { return "<span class='dim'>" + t + "</span>"; };
-    var ok = function (t) { return "<span class='ok'>" + t + "</span>"; };
-    var warn = function (t) { return "<span class='warn'>" + t + "</span>"; };
-    $("st-lock").innerHTML = !has("locked") ? dim("n/a") : v.locked ? ok("Locked") : warn("Unlocked");
-    $("st-doors").innerHTML = !has("doors_open") ? dim("n/a") : v.doors_open.length ? warn(v.doors_open.map(function (d) { return DOOR[d] || d; }).join(", ") + " open") : ok("All closed");
-    var wins = openWindows(v), anyWin = ["win_fd", "win_fp", "win_rd", "win_rp"].some(has);
-    $("st-win").innerHTML = !anyWin ? dim("n/a") : wins.length ? warn(wins.join(", ") + " open") : ok("All closed");
-    $("st-sentry").innerHTML = !has("sentry") ? dim("n/a") : (v.sentry === "Off" ? "Off" : v.sentry === "Panic" ? warn("Alarm") : "On (" + v.sentry.toLowerCase() + ")");
-    var home = s.charger && s.charger.plugged ? true : has("home") ? v.home : null;
-    $("st-where").innerHTML = home === null ? dim("n/a") : home ? "Home" : "Away";
-    var today = null, k = Object.keys(daysData).sort().reverse()[0];
-    if (k) { var t = daysData[k]; if (t.odo_end !== undefined && t.e_start !== undefined) {
-      var dk = t.odo_end - t.odo_start, u = t.e_start + (t.batt_in_kwh || 0) - t.e_end; if (dk >= 5 && u > 0) today = Math.round(u * 1000 / dk); } }
-    var wk = avgWhKm(7);
-    $("st-eff").innerHTML = wk === null && today === null ? dim("n/a") :
-      (wk !== null ? wk + " <small>Wh/km, 7 days</small>" : "") + (today !== null ? "<div class='sub2'>today " + today + " Wh/km</div>" : "");
-    $("st-loss").innerHTML = lastEff === null ? dim("n/a") : (100 - lastEff) + "% <small>last home charge</small>";
-    var upd = v.update_version && v.update_version !== v.version;
-    $("st-sw").innerHTML = !has("version") ? dim("n/a") : v.version + (upd ? "<div class='sub2 warn'>Update " + v.update_version + " ready</div>" : "");
-    // notices: shown on the Car tab, and the important ones on the dashboard too
-    var notes = [], hr = new Date().getHours();
-    if (has("locked") && !v.locked && home && (hr >= 21 || hr < 6)) notes.push(["warn", "Car is unlocked at home overnight"]);
-    if (wins.length && wxRain12 !== null && wxRain12 >= 40) notes.push(["warn", "A window is open (" + wins.join(", ") + ") and rain is " + wxRain12 + "% likely in the next 12 hours"]);
-    else if (wins.length && home && (hr >= 21 || hr < 6)) notes.push(["warn", "A window is open overnight (" + wins.join(", ") + ")"]);
-    if (has("doors_open") && v.doors_open.length && home && (hr >= 21 || hr < 6)) notes.push(["warn", "A door or boot is open overnight"]);
-    if (v.sentry === "Panic") notes.push(["warn", "Sentry Mode alarm triggered"]);
-    if (upd) notes.push(["info", "Software update " + v.update_version + " is ready. It installs best while plugged in, from the Tesla app or the car's screen."]);
-    var html = notes.map(function (n) { return "<div class='notice" + (n[0] === "info" ? " info" : "") + "'>" + n[1] + "</div>"; }).join("");
-    $("notices").innerHTML = html; $("car-notices").innerHTML = html;
-  }
-  var lastEff = null;
-  function pollSessionsEff() {
-    fetch("/api/sessions", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
-      var list = (d.sessions || []).filter(function (x) { return !x.away && x.eff_pct; });
-      lastEff = list.length ? list[list.length - 1].eff_pct : null;
-    }).catch(function () {});
-  }
-  function pollHealth() {
-    fetch("/api/health", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (rows) { healthRows = rows || []; drawHealth(); }).catch(function () {});
-  }
-  $("hrange").addEventListener("click", function (e) {
-    var b = e.target.closest("button");
-    if (!b) return;
-    healthDays = parseInt(b.getAttribute("data-d"), 10);
-    var all = $("hrange").querySelectorAll("button");
-    for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
-    drawHealth();
-  });
-  function cellRating(mv) {
-    return mv < 30 ? "<span class='ok'>" + mv + " mV</span> <small>well balanced</small>"
-      : mv < 60 ? mv + " mV <small>fair</small>" : "<span class='warn'>" + mv + " mV</span> <small>due a full charge</small>";
-  }
-  function drawHealth() {
-    var v = (state && state.tesla && state.tesla.vehicle) || {};
-    var caps = healthRows.filter(function (r) { return r[1] !== null; });
-    $("hs-cap").innerHTML = caps.length ? caps[caps.length - 1][1].toFixed(1) + "<small>kWh</small>" : "<span class='muted'>n/a</span>";
-    if (caps.length >= 2) {
-      var a = caps[0][1], b = caps[caps.length - 1][1], pct = (b - a) / a * 100;
-      $("hs-change").innerHTML = (pct >= 0 ? "+" : "") + pct.toFixed(1) + "<small>% since " +
-        new Date(caps[0][0] + "T12:00:00").toLocaleDateString([], { month: "short", year: "numeric" }) + "</small>";
-    } else $("hs-change").innerHTML = "<span class='muted'>n/a</span>";
-    $("hs-cell").innerHTML = v.cell_mv !== undefined && v.cell_mv !== null ? cellRating(v.cell_mv) : "<span class='muted'>n/a</span>";
-    $("hs-now").innerHTML = v.energy_kwh !== undefined && v.energy_kwh !== null ? v.energy_kwh.toFixed(1) + "<small>kWh</small>" : "<span class='muted'>n/a</span>";
-    var box = $("hchart"), tip = $("htip");
-    var old = box.querySelector("svg"); if (old) old.remove();
-    var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
-    if (!box.clientWidth) return;
-    var nd = new Date(); nd.setHours(0, 0, 0, 0);
-    var now = nd.getTime() / 1000 + 86400;
-    var first = caps.length ? new Date(healthRows[0][0] + "T00:00:00").getTime() / 1000 : now - 86400;
-    var from = healthDays ? now - healthDays * 86400 : Math.min(first, now - 30 * 86400);
-    var rows = healthRows.map(function (r) { return [new Date(r[0] + "T12:00:00").getTime() / 1000, r[1], r[2]]; })
-      .filter(function (r) { return r[0] >= from; });
-    if (!rows.length) {
-      var e = document.createElement("div"); e.className = "empty";
-      e.textContent = "Fills in with each charge to 95% or more";
-      box.appendChild(e); return;
-    }
-    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 46, mt = 10, mb = 26, iw = W - ml - mr, ih = H - mt - mb;
-    var cv = rows.filter(function (r) { return r[1] !== null; }).map(function (r) { return r[1]; });
-    var lo = cv.length ? Math.floor(Math.min.apply(null, cv) - 1) : 50, hi = cv.length ? Math.ceil(Math.max.apply(null, cv) + 1) : 62;
-    if (hi - lo < 4) { lo = Math.floor((lo + hi) / 2 - 2); hi = lo + 4; }
-    var q = Math.ceil((hi - lo) / 4); hi = lo + 4 * q;
-    var mv = rows.filter(function (r) { return r[2] !== null; }).map(function (r) { return r[2]; });
-    var mhi = Math.max(40, Math.ceil(Math.max.apply(null, mv.concat([0])) / 20) * 20);
-    var x = function (t) { return ml + (t - from) / (now - from) * iw; };
-    var yC = function (v) { return mt + ih - (v - lo) / (hi - lo) * ih; };
-    var yM = function (v) { return mt + ih - v / mhi * ih; };
-    var html = "<g class='axis'>";
-    for (var i = 0; i <= 4; i++) {
-      var yy = mt + ih - ih * i / 4;
-      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
-      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + (lo + q * i) + "</text>";
-      html += "<text x='" + (W - mr + 8) + "' y='" + (yy + 4) + "'>" + Math.round(mhi * i / 4) + "</text>";
-    }
-    html += "<text x='" + (ml - 8) + "' y='" + (mt + ih + 18) + "' text-anchor='end'>kWh</text><text x='" + (W - 2) + "' y='" + (mt + ih + 18) + "' text-anchor='end'>mV</text>";
-    html += timeLabels(from, now, x, H, iw) + "</g>";
-    [[1, "--s-car", yC, false], [2, "--s-cabin", yM, true]].forEach(function (sv) {
-      var pts = rows.filter(function (r) { return r[sv[0]] !== null; });
-      if (!pts.length) return;
-      html += "<path class='line' d='M" + pts.map(function (r) { return x(r[0]).toFixed(1) + "," + sv[2](r[sv[0]]).toFixed(1); }).join("L") +
-        "' style='stroke:var(" + sv[1] + ")" + (sv[3] ? ";stroke-dasharray:5 4;stroke-width:1.6" : "") + "'/>";
-      html += pts.map(function (r) { return "<circle r='2.5' cx='" + x(r[0]).toFixed(1) + "' cy='" + sv[2](r[sv[0]]).toFixed(1) + "' style='fill:var(" + sv[1] + ")'/>"; }).join("");
-    });
-    html += "<line class='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
-    html += "<rect class='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
-    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "Usable battery capacity and cell spread over time");
-    svg.innerHTML = html;
-    box.insertBefore(svg, tip);
-    var hit = svg.querySelector(".hit"), cross = svg.querySelector(".cross");
-    function move(ev) {
-      var r = svg.getBoundingClientRect(), cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-      var t = from + (cx - ml) / iw * (now - from), best = null, bd = Infinity;
-      rows.forEach(function (row) { var dd = Math.abs(row[0] - t); if (dd < bd) { bd = dd; best = row; } });
-      if (!best) return;
-      var px = x(best[0]);
-      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      tip.innerHTML = "<div class='t'>" + new Date(best[0] * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
-        "<div class='r'><span class='swatch' style='background:var(--s-car)'></span>Capacity<b>" + (best[1] !== null ? best[1].toFixed(1) + " kWh" : "n/a") + "</b></div>" +
-        "<div class='r'><span class='swatch dashed' style='--dash:var(--s-cabin)'></span>Cell spread<b>" + (best[2] !== null ? best[2] + " mV" : "n/a") + "</b></div>";
-      tip.style.display = "block";
-      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
-      tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
-    }
-    function leave() { tip.style.display = "none"; cross.style.display = "none"; }
-    hit.addEventListener("mousemove", move);
-    hit.addEventListener("touchstart", move, { passive: true });
-    hit.addEventListener("touchmove", move, { passive: true });
-    hit.addEventListener("mouseleave", leave);
-    hit.addEventListener("touchend", leave);
-  }
+  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(drawChart, 150); });
 
   // ---- weather card
   var WXI = {
@@ -1536,7 +903,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   function pollWeather() {
     fetch("/api/weather", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (w) {
       if (!w.ok) { $("wx").hidden = true; return; }
-      wxRain12 = Math.max.apply(null, w.hours.map(function (h) { return h.rain || 0; }).concat([0]));
       $("wx").hidden = false;
       var k = wxKind(w.now.code, w.now.day);
       $("wx-icon").innerHTML = k[0];
@@ -1617,12 +983,9 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
     fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
   }
 
-  poll(); pollHistory(); pollDays(); pollSchedule(); pollCar(); pollExports(); pollTyres(); pollWeather(); pollHealth(); pollSessionsEff();
-  setInterval(pollHealth, 600000); setInterval(pollSessionsEff, 600000);
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollExports(); pollWeather();
   setInterval(pollWeather, 600000);
-  setInterval(pollTyres, 600000);
   setInterval(pollExports, 3600000);
-  setInterval(pollCar, 60000);
   setInterval(pollSchedule, 120000);
   setInterval(poll, 10000);
   setInterval(tickClock, 1000);

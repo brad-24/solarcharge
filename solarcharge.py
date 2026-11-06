@@ -68,6 +68,9 @@ DEFAULTS = {
         "api_base": "https://api.teslemetry.com",
         "vehicle_poll_minutes": "0",
         "stream": "true",
+        # TeslaTrack on this Pi (for example http://localhost:8084). When set, the car's battery level,
+        # charge limit and time to full come from TeslaTrack instead of SolarCharge's own stream.
+        "teslatrack_url": "",
         "battery_kwh": "60",
     },
     "schedule": {
@@ -127,9 +130,6 @@ DEFAULTS = {
     "tariff": {
         "import_c_per_kwh": "30",
         "feed_in_c_per_kwh": "5",
-        # rough prices for charging away from home, for the Sessions page
-        "away_dc_c_per_kwh": "60",
-        "away_ac_c_per_kwh": "40",
     },
     "web": {
         "bind": "0.0.0.0",
@@ -161,6 +161,7 @@ class Settings(object):
         self.api_base = g("tesla", "api_base").strip().rstrip("/")
         self.vehicle_poll_min = gf("tesla", "vehicle_poll_minutes")
         self.stream = gb("tesla", "stream")
+        self.teslatrack_url = g("tesla", "teslatrack_url").rstrip("/")
         self.battery_kwh = gf("tesla", "battery_kwh")
 
         self.full_every = max(1, gi("schedule", "full_charge_every_days"))
@@ -180,8 +181,6 @@ class Settings(object):
         self.ble_read_min = gf("ble", "read_battery_minutes")
         self.ble_fast = gb("ble", "fast_tracking")
         self.cloud_raises_day = gi("ble", "teslemetry_raises_per_day")
-        self.away_dc_price = gf("tariff", "away_dc_c_per_kwh") / 100.0
-        self.away_ac_price = gf("tariff", "away_ac_c_per_kwh") / 100.0
 
         self.dry_run = gb("control", "dry_run")
         self.default_mode = g("control", "default_mode").strip()
@@ -929,6 +928,43 @@ class TeslemetryStream(object):
             self.on_update(upd)
 
 
+class TeslaTrackFeed(object):
+    """Takes the car's battery level, charge limit and time to full from TeslaTrack on this Pi,
+    so only one app holds the Teslemetry stream."""
+
+    def __init__(self, s, ctl):
+        self.s = s
+        self.ctl = ctl
+        self.connected = False
+        self.last = None
+
+    def start(self):
+        th = threading.Thread(target=self._run, name="teslatrack")
+        th.daemon = True
+        th.start()
+
+    def _run(self):
+        while True:
+            try:
+                with urlopen(self.s.teslatrack_url + "/api/vehicle", timeout=5) as r:
+                    v = json.loads(r.read().decode("utf-8"))
+                if not self.connected:
+                    log.info("Car data from TeslaTrack connected")
+                self.connected = True
+                self.ctl.tt_home_days = v.get("home_days")
+                upd = {k: v[k] for k in ("soc", "limit", "ttf_h", "range_km", "energy_kwh", "ac_in", "home")
+                       if v.get(k) is not None}
+                # only pass on readings that are new, so stale values don't look fresh
+                if upd and v.get("t") != self.last:
+                    self.last = v.get("t")
+                    self.ctl.vehicle_update(upd)
+            except Exception as e:
+                if self.connected:
+                    log.info("Car data from TeslaTrack unavailable (%s)", e)
+                self.connected = False
+            time.sleep(15)
+
+
 # ---------------------------------------------------------------- simulator
 
 class SimWorld(object):
@@ -1180,9 +1216,7 @@ class Controller(object):
         self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
         self.cloud_cap_noted = False     # logged that today's Teslemetry amp increases are used up
         self.wc_plugged = False          # Wall Charger says the car is plugged in (so it's at home)
-        self.events_pending = []         # events noticed in the stream thread, logged on the next tick
-        self.last_loc = None             # car's latest position, in memory only
-        self.away = st.get("away")       # a charging session away from home, while it's happening
+        self.tt_home_days = None         # weekdays the car is usually home, learned by TeslaTrack
         self.self_starts = deque()       # times the car restarted by itself, to catch a stop and start loop
         self.grid_samples = deque()
         self.raises = deque()
@@ -1205,15 +1239,8 @@ class Controller(object):
         self.minute_acc = None
         self.last_save = clock()
         self.vehicle = st.get("vehicle")
-        # car telemetry for the Car chart: [time, battery %, cabin C], recorded as values arrive
-        self.car_history = deque(st.get("car_history", []), maxlen=20000)
-        self.car_compacted = 0.0
-        # tyre pressures per day: {date: {"fl": [sum, count], ...}}, for the Tyres chart (90 days)
-        self.tyre_days = st.get("tyre_days") or self._tyres_from_history()
-        # battery health per day: {date: {"cap": usable kWh at full, "soc": %, "cell_mv": spread}}
-        self.health = st.get("health") or {}
-        # where the car charges at home, learned while it's plugged into the Wall Charger (kept on the Pi)
-        self.home_loc = st.get("home_loc")
+        # car history from before TeslaTrack existed, kept untouched so TeslaTrack can bring it across
+        self.legacy = {k: st[k] for k in ("car_history", "tyre_days", "health", "home_loc") if st.get(k)}
         self.vehicle_check = True       # one-off battery read when the car is awake (startup, plug in, charge end)
         self.vehicle_check_next = 0.0
         self.vehicle_next = 0.0
@@ -1400,11 +1427,6 @@ class Controller(object):
         if chg is not None and chg["charging"]:
             car_w = chg["amps"] * self.volts
 
-        while self.events_pending:
-            self.event(self.events_pending.pop(0))
-        self._home_time(now, dt)
-        if self.away and now - self.away["last"] > 900:
-            self._end_away(now)
 
         if inv is not None:
             self.samples.append((now, car_w - inv["grid"]))
@@ -1646,38 +1668,12 @@ class Controller(object):
         full = False
         with self.lock:
             v = dict(self.vehicle or {})
-            if upd.get("odo_km") is not None:
-                # distance driven today: from the last odometer reading before today, to the latest
-                if "odo_start" not in self.today:
-                    self.today["odo_start"] = v.get("odo_km") if v.get("odo_km") is not None else upd["odo_km"]
-                self.today["odo_end"] = upd["odo_km"]
-            day = time.strftime("%Y-%m-%d", time.localtime(now))
-            for w in ("fl", "fr", "rl", "rr"):
-                if upd.get("tp_" + w) is not None:
-                    acc = self.tyre_days.setdefault(day, {}).setdefault(w, [0.0, 0])
-                    acc[0] += upd["tp_" + w]
-                    acc[1] += 1
-            for old in sorted(self.tyre_days)[:-90]:
-                del self.tyre_days[old]
-            if upd.get("speed_kmh"):
-                self.today["top_kmh"] = max(self.today.get("top_kmh", 0), upd["speed_kmh"])
-            loc = upd.pop("_loc", None)
-            if loc:
-                self._place(now, loc, upd)
-            for key in ("ac_in", "dc_in"):
-                if upd.get(key) is not None:
-                    self._battery_in(now, key, upd[key], v.get(key), upd.get("fast_charger", v.get("fast_charger")))
-            if upd.get("energy_kwh") is not None:
-                if "e_start" not in self.today:
-                    self.today["e_start"] = v.get("energy_kwh") if v.get("energy_kwh") is not None else upd["energy_kwh"]
-                self.today["e_end"] = upd["energy_kwh"]
+            upd.pop("_loc", None)          # car tracking lives in TeslaTrack now
+            if upd.get("ac_in") is not None:
+                self._battery_in(upd["ac_in"], v.get("ac_in"))
             v.update(upd)
-            if v.get("brick_max") and v.get("brick_min"):
-                v["cell_mv"] = int(round((v["brick_max"] - v["brick_min"]) * 1000))
-            self._health_point(now, v, upd)
             v["t"] = time.time()
             self.vehicle = v
-            self._car_point(now, upd)
             if v.get("soc") is not None and v["soc"] >= 100 and (not self.last_full or now - self.last_full > 12 * 3600):
                 self.last_full = now
                 full = True
@@ -1686,205 +1682,26 @@ class Controller(object):
                 "%a %d %b", time.localtime(now + self.s.full_every * 86400)))
             self._save(now)
 
-    HOME_RADIUS_M = 250
-
-    @staticmethod
-    def _dist_m(a, b):
-        """Distance in metres between two (lat, lon) points."""
-        la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-        h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-        return 6371000 * 2 * math.asin(math.sqrt(h))
-
-    def _place(self, now, loc, upd):
-        """Works out home or away from the car's position (lock held). The position stays in memory."""
-        self.last_loc = (loc[0], loc[1], now)
-        if self.wc_plugged:
-            # plugged into the Wall Charger, so this is home
-            if not self.home_loc or self._dist_m(self.home_loc, loc) > 50:
-                first = not self.home_loc
-                self.home_loc = [round(loc[0], 5), round(loc[1], 5)]
-                if first:
-                    self.events_pending.append("Learned where the car charges at home (kept on the Pi only)")
-        if self.home_loc:
-            upd["home"] = self._dist_m(self.home_loc, loc) <= self.HOME_RADIUS_M
-
-    def _home_time(self, now, dt):
-        """Counts daytime hours the car is at home, so the Full charge card can learn home days."""
-        hr = time.localtime(now).tm_hour
-        if dt <= 0 or not 9 <= hr < 15:
-            return
-        home = True if self.wc_plugged else (self.vehicle or {}).get("home")
-        if home is None:
-            return
-        self.today["home_known_s"] = self.today.get("home_known_s", 0) + dt
-        if home:
-            self.today["home_s"] = self.today.get("home_s", 0) + dt
-
-    def _battery_in(self, now, key, val, prev, fast):
-        """Energy that reached the battery, from the car's AC or DC charging counters (lock held)."""
+    def _battery_in(self, val, prev):
+        """Energy that reached the battery while charging at home, from the car's AC counter (lock held)."""
         if prev is None or val < prev - 0.05:
             delta = val if prev is not None else 0.0    # counter reset: a new charge started
         else:
             delta = max(0.0, val - prev)
-        if delta <= 0 or delta > 100:
+        if delta <= 0 or delta > 100 or not self.wc_plugged:
             return
         self.today["batt_in_kwh"] = self.today.get("batt_in_kwh", 0.0) + delta
-        at_home = self.wc_plugged and key == "ac_in"
-        if at_home:
-            if self.session is not None:
-                self.session["batt_kwh"] = self.session.get("batt_kwh", 0.0) + delta
-            return
-        kind = "dc" if key == "dc_in" or fast else "ac"
-        if self.away is None:
-            self.away = {"start": now, "kind": kind, "kwh": 0.0, "last": now}
-            self.events_pending.append("Charging away from home (%s)" % ("fast charger" if kind == "dc" else "AC charger"))
-        self.away["kwh"] += delta
-        self.away["last"] = now
-        if kind == "dc":
-            self.away["kind"] = "dc"
-        self.today["away_kwh"] = self.today.get("away_kwh", 0.0) + delta
-
-    def _end_away(self, now):
-        a, self.away = self.away, None
-        if not a or a["kwh"] < 0.1:
-            return
-        price = (self.s.away_dc_price if a["kind"] == "dc" else self.s.away_ac_price)
-        kwh = round(a["kwh"], 2)
-        rec = {"start": int(a["start"]), "end": int(a["last"]), "kwh": kwh, "solar_kwh": 0.0, "grid_kwh": kwh,
-               "solar_pct": 0, "charge_min": int(round((a["last"] - a["start"]) / 60.0)),
-               "plugged_min": int(round((a["last"] - a["start"]) / 60.0)), "peak_kw": None,
-               "starts": 0, "stops": 0, "commands": 0, "modes": [], "cost": round(kwh * price, 2), "saved": 0.0,
-               "import_price": price, "feed_in_price": 0.0, "away": True, "kind": a["kind"]}
-        with self.lock:
-            self.sessions.append(rec)
-        self.store and self.store.save_sessions(self.sessions)
-        self.event("Away charging session: %.1f kWh at a %s charger, about $%.2f" %
-                   (kwh, "fast" if a["kind"] == "dc" else "public AC", rec["cost"]))
-
-    def _health_point(self, now, v, upd):
-        """Logs the pack's usable capacity once a day, from a reading near full (lock held)."""
-        if upd.get("energy_kwh") is None and upd.get("soc") is None:
-            return
-        soc, e = v.get("soc"), v.get("energy_kwh")
-        if soc is None or e is None or soc < 95:
-            return
-        day = time.strftime("%Y-%m-%d", time.localtime(now))
-        cur = self.health.get(day)
-        if cur and cur.get("soc", 0) > soc:
-            return
-        self.health[day] = {"cap": round(e / (soc / 100.0), 2), "soc": soc, "cell_mv": v.get("cell_mv")}
-        for old in sorted(self.health)[:-1100]:
-            del self.health[old]
-
-    def get_health(self):
-        with self.lock:
-            h = dict(self.health)
-        return [[d, h[d].get("cap"), h[d].get("cell_mv"), h[d].get("soc")] for d in sorted(h)]
-
-    CAR_KEEP_S = 90 * 86400       # car history is kept for 90 days:
-    CAR_FULL_S = 7 * 86400        # every reading for the last week, then
-    CAR_BUCKET_S = 1800           # one point per half hour for older readings
-    # columns 1 to 8 of each car history point
-    CAR_KEYS = ("soc", "cabin", "outside", "range_km", "tp_fl", "tp_fr", "tp_rl", "tp_rr")
-
-    def _car_point(self, now, upd):
-        """Adds battery level and cabin temperature to the car history (lock held)."""
-        vals = [upd.get(k) for k in self.CAR_KEYS]
-        if all(v is None for v in vals):
-            return
-        h = self.car_history
-        last = (list(h[-1]) + [None] * len(self.CAR_KEYS))[:1 + len(self.CAR_KEYS)] if h else None
-        if last and now - last[0] < 120:
-            # merge updates that arrive close together into one point
-            h[-1] = [last[0]] + [v if v is not None else o for v, o in zip(vals, last[1:])]
-            return
-        if last and now - last[0] < 600 and all(v is None or v == o for v, o in zip(vals, last[1:])):
-            return   # nothing new; a point every 10 minutes is plenty while values are steady
-        h.append([now] + vals)
-        while h and now - h[0][0] > self.CAR_KEEP_S:
-            h.popleft()
-        if now - self.car_compacted > 6 * 3600:
-            self._compact_car(now)
-
-    def _compact_car(self, now):
-        """Thins readings older than a week to one per half hour, keeping the latest value of each kind."""
-        self.car_compacted = now
-        cut = now - self.CAR_FULL_S
-        h = self.car_history
-        if not h or h[0][0] >= cut:
-            return
-        out, cur, key = [], None, None
-        for p in h:
-            if p[0] >= cut:
-                break
-            p = (list(p) + [None] * len(self.CAR_KEYS))[:1 + len(self.CAR_KEYS)]
-            b = int(p[0] // self.CAR_BUCKET_S)
-            if b != key:
-                if cur:
-                    out.append(cur)
-                cur, key = list(p), b
-            else:
-                cur = [p[0]] + [v if v is not None else o for v, o in zip(p[1:], cur[1:])]
-        if cur:
-            out.append(cur)
-        recent = [p for p in h if p[0] >= cut]
-        h.clear()
-        h.extend(out + recent)
-
-    def _tyres_from_history(self):
-        """Seeds the daily tyre averages from the car history (used once, after updating)."""
-        out = {}
-        for p in getattr(self, "car_history", []):
-            day = time.strftime("%Y-%m-%d", time.localtime(p[0]))
-            for i, w in enumerate(("fl", "fr", "rl", "rr")):
-                v = p[5 + i] if len(p) > 5 + i else None
-                if v is not None:
-                    acc = out.setdefault(day, {}).setdefault(w, [0.0, 0])
-                    acc[0] += v
-                    acc[1] += 1
-        return out
-
-    def get_tyres(self, days):
-        """[[date, FL, FR, RL, RR], ...] daily average pressures in psi, oldest first."""
-        with self.lock:
-            td = {k: dict(v) for k, v in self.tyre_days.items()}
-        out = []
-        for day in sorted(td)[-days:]:
-            row = [day]
-            for w in ("fl", "fr", "rl", "rr"):
-                acc = td[day].get(w)
-                row.append(round(acc[0] / acc[1], 1) if acc and acc[1] else None)
-            out.append(row)
-        return out
+        if self.session is not None:
+            self.session["batt_kwh"] = self.session.get("batt_kwh", 0.0) + delta
 
     def _home_days(self):
-        """Weekdays the car is usually home during the day, learned from the last 8 weeks once there's
-        enough to go on; the configured days fill in any weekday without at least two days of data."""
-        with self.lock:
-            days = dict(self.days)
-            days[self.today_key] = dict(self.today)
-        seen, home = {}, {}
-        for key, t in days.items():
-            if t.get("home_known_s", 0) < 3 * 3600:
-                continue
-            wd = date(*map(int, key.split("-"))).weekday()
-            seen[wd] = seen.get(wd, 0) + 1
-            if t.get("home_s", 0) >= 4 * 3600:
-                home[wd] = home.get(wd, 0) + 1
-        known = [wd for wd in seen if seen[wd] >= 2]
-        if len(known) < 3:
+        """Weekdays the car is usually home during the day: learned by TeslaTrack once it has enough to go
+        on, with the configured days filling in any weekday it hasn't learned yet."""
+        hd = self.tt_home_days
+        if not hd or len(hd.get("known", [])) < 3:
             return set(self.s.home_days), False
-        out = set(wd for wd in self.s.home_days if wd not in known)
-        out |= set(wd for wd in known if home.get(wd, 0) * 2 >= seen[wd])
-        return out, True
-
-    def get_car_history(self, hours):
-        with self.lock:
-            h = list(self.car_history)
-        if hours > 0:
-            cut = self.clock() - hours * 3600
-            h = [p for p in h if p[0] >= cut]
-        return h
+        known = set(hd["known"])
+        return set(wd for wd in self.s.home_days if wd not in known) | set(hd["home"]), True
 
     def mark_full(self):
         now = self.clock()
@@ -2138,26 +1955,12 @@ class Controller(object):
             self.today = self._blank_today()
             self.cloud_cap_noted = False
 
-    @staticmethod
-    def _wh_per_km(t):
-        """Energy used per km for a day: battery at the start, plus charged in, less battery at the end."""
-        try:
-            km = t["odo_end"] - t["odo_start"]
-            used = t["e_start"] + t.get("batt_in_kwh", 0.0) - t["e_end"]
-        except (KeyError, TypeError):
-            return None
-        if km < 5 or used <= 0:
-            return None
-        return int(round(used * 1000.0 / km))
-
     def _archive_pending(self, now):
         """Writes every finished day not yet archived: minute data and the daily totals."""
         yday = datetime.fromtimestamp(now).date() - timedelta(days=1)
         with self.lock:
             hist = list(self.history)
-            car = list(self.car_history)
             days = dict(self.days)
-        tyres = {r[0]: r[1:] for r in self.get_tyres(90)}
         if self.archived_through:
             try:
                 start = date(*map(int, self.archived_through.split("-"))) + timedelta(days=1)
@@ -2165,17 +1968,12 @@ class Controller(object):
                 start = yday
         else:
             # first run: archive whatever history is still held
-            firsts = [datetime.fromtimestamp(p[0]).date() for p in hist[:1] + car[:1]]
+            firsts = [datetime.fromtimestamp(p[0]).date() for p in hist[:1]]
             firsts += [date(*map(int, k.split("-"))) for k in sorted(days)[:1]]
             start = min(firsts) if firsts else yday
         by_min = {}
         for p in hist:
             by_min[int(p[0] // 60)] = [p[1], p[2], p[4], p[3], p[5], "", "", "", ""]
-        for p in car:
-            row = by_min.setdefault(int(p[0] // 60), [""] * 9)
-            for i, v in enumerate(p[1:5]):
-                if v is not None:
-                    row[5 + i] = v
         d = start
         while d <= yday:
             key = d.isoformat()
@@ -2188,16 +1986,9 @@ class Controller(object):
             self.store.append_minutes(key, lines)
             t = days.get(key)
             if t:
-                odo = t.get("odo_end")
-                driven = (odo - t["odo_start"]) if odo is not None and t.get("odo_start") is not None else None
-                tp = ",".join("" if v is None else str(v) for v in tyres.get(key, [None] * 4))
-                hp = self.health.get(key) or {}
-                whkm = self._wh_per_km(t)
-                tp += ",%s,%s,%s,%s,%s,%s" % (
-                    hp.get("cap", ""), "" if hp.get("cell_mv") is None else hp["cell_mv"],
-                    "%.2f" % t["batt_in_kwh"] if t.get("batt_in_kwh") else "",
-                    whkm if whkm is not None else "", "%.2f" % t["away_kwh"] if t.get("away_kwh") else "",
-                    "%.1f" % (t["home_s"] / 3600.0) if t.get("home_s") else "")
+                # the car columns are kept for older files; TeslaTrack's archive has the car's figures now
+                odo = driven = None
+                tp = ",,,,,,%s,,," % ("%.2f" % t["batt_in_kwh"] if t.get("batt_in_kwh") else "")
                 self.store.append_daily("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%s,%s,%s,%s\n" % (
                     key, t.get("pv_wh", 0) / 1000.0, t.get("car_wh", 0) / 1000.0, t.get("car_solar_wh", 0) / 1000.0,
                     t.get("import_wh", 0) / 1000.0, t.get("export_wh", 0) / 1000.0,
@@ -2221,13 +2012,9 @@ class Controller(object):
             "session": self.session,
             "last_full": self.last_full,
             "vehicle": self.vehicle,
-            "car_history": list(self.car_history),
-            "tyre_days": self.tyre_days,
-            "health": self.health,
-            "home_loc": self.home_loc,
-            "away": self.away,
             "archived_through": self.archived_through,
             "saved": now,
+            **self.legacy,
         })
 
     def save(self):
@@ -2239,6 +2026,7 @@ class Controller(object):
         car_kwh = t["car_wh"] / 1000.0
         snap = {
             "version": VERSION,
+            "teslatrack_port": (urlparse(self.s.teslatrack_url).port or 8084) if self.s.teslatrack_url else 0,
             "time": now,
             "dry_run": self.dry_run,
             "simulated": self.simulated,
@@ -2329,7 +2117,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         c = self.controller
-        if u.path in ("/", "/index.html", "/car"):
+        if u.path == "/car" and c.s.teslatrack_url:
+            # the car pages moved to TeslaTrack
+            host = (self.headers.get("Host") or "localhost").split(":")[0]
+            port = urlparse(c.s.teslatrack_url).port or 8084
+            self.send_response(302)
+            self.send_header("Location", "http://%s:%d/" % (host, port))
+            self.end_headers()
+        elif u.path in ("/", "/index.html", "/car"):
             self._page("dashboard.html")
         elif u.path in ("/img/scene.jpg", "/img/scene-day.jpg", "/img/scene-dusk.jpg",
                         "/img/icon-180.png", "/favicon.ico"):
@@ -2355,22 +2150,6 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 minutes = 1440
             self._json(c.get_history(minutes))
-        elif u.path == "/api/carhistory":
-            q = parse_qs(u.query)
-            try:
-                hours = int(q.get("hours", ["168"])[0])
-            except ValueError:
-                hours = 168
-            self._json(c.get_car_history(hours))
-        elif u.path == "/api/health":
-            self._json(c.get_health())
-        elif u.path == "/api/tyres":
-            q = parse_qs(u.query)
-            try:
-                days = int(q.get("days", ["90"])[0])
-            except ValueError:
-                days = 90
-            self._json(c.get_tyres(days))
         elif u.path == "/api/sessions":
             self._json(c.get_sessions())
         elif u.path == "/api/export":
@@ -2545,49 +2324,20 @@ def main():
         log.warning("Teslemetry token or VIN missing, commands will fail")
 
     if args.simulate:
-        # a year of made up battery health: capacity easing down slowly, cells kept balanced
-        for i in range(365, 0, -3):
-            day = time.strftime("%Y-%m-%d", time.localtime(clock() - i * 86400))
-            ctl.health[day] = {"cap": round(58.9 - (365 - i) * 0.0035 + random.uniform(-0.25, 0.25), 2), "soc": 100,
-                               "cell_mv": random.randint(12, 26) if i % 21 else random.randint(35, 55)}
-        # a month of made up tyre history, with the rear right slowly losing air
-        for i in range(30, 0, -1):
-            day = time.strftime("%Y-%m-%d", time.localtime(clock() - i * 86400))
-            if random.random() < 0.8:
-                base = 41.5 + random.uniform(-0.4, 0.4)
-                ctl.tyre_days[day] = {"fl": [base + 0.3, 1], "fr": [base, 1], "rl": [base + 0.1, 1],
-                                      "rr": [base - (30 - i) * 0.12, 1]}
-
         def fake_stream():
             while True:
                 cs, _ = tesla.charge_state()
-                lt = time.localtime(clock())
-                hr = lt.tm_hour + lt.tm_min / 60.0
-                cabin = 21 + 17 * max(0.0, math.sin((hr - 8) / 12.0 * math.pi)) + random.uniform(-0.4, 0.4)
-                outside = 17 + 11 * max(0.0, math.sin((hr - 7) / 13.0 * math.pi)) + random.uniform(-0.2, 0.2)
-                warm = (outside - 17) * 0.12   # tyre pressure rises a little as it warms up
-                driving = 7 <= hr < 9 or 16 <= hr < 18
-                fake_stream.odo = getattr(fake_stream, "odo", 1234.0) + (random.uniform(0, 0.4) if driving else 0)
-                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "cabin": round(cabin, 1),
-                                    "outside": round(outside, 1), "range_km": int(cs["soc"] * 4.3),
-                                    "odo_km": round(fake_stream.odo, 1), "tp_fl": round(41.2 + warm, 1),
-                                    "tp_fr": round(40.9 + warm, 1), "tp_rl": round(41.0 + warm, 1),
-                                    "tp_rr": round(38.6 + warm - 0.02 * (hr - 9), 1), "tp_t": time.time(),
-                                    "speed_kmh": random.randint(40, 105) if driving else 0})
-                # battery health, security, home and software, made up
                 # energy into the battery this charge, following the made up battery level
                 fake_stream.soc0 = getattr(fake_stream, "soc0", cs["soc"])
                 fake_stream.ac = max(getattr(fake_stream, "ac", 0.0), (cs["soc"] - fake_stream.soc0) / 100.0 * 57.6)
-                ctl.vehicle_update({"energy_kwh": round(cs["soc"] / 100.0 * 57.6, 2),
-                                    "brick_max": 3.342, "brick_min": 3.326, "locked": hr < 7 or hr >= 18,
-                                    "doors_open": [], "win_fd": "Closed", "win_fp": "Closed", "win_rd": "Closed",
-                                    "win_rp": "PartiallyOpen" if 12 <= hr < 14 else "Closed", "sentry": "Off",
-                                    "_loc": (-27.6012, 151.9431), "ac_in": round(fake_stream.ac, 3),
-                                    "version": "2026.38.6", "update_version": "2026.44.1"})
+                ctl.vehicle_update({"soc": cs["soc"], "limit": cs["limit"], "range_km": int(cs["soc"] * 4.3),
+                                    "ac_in": round(fake_stream.ac, 3), "home": True})
                 time.sleep(2)
         th = threading.Thread(target=fake_stream)
         th.daemon = True
         th.start()
+    elif s.teslatrack_url:
+        TeslaTrackFeed(s, ctl).start()
     elif s.stream and s.vin:
         TeslemetryStream(s, ctl.vehicle_update).start()
 

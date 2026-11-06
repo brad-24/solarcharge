@@ -106,13 +106,14 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   :root:not([data-theme="light"]) .theme .i-moon { display: none; }
 }
 .theme:hover { color: var(--text); }
+nav a[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav><a href="/">Dashboard</a><a href="/car">Car</a><a href="/sessions" class="on">Sessions</a></nav>
+    <nav><a href="/">Dashboard</a><a href="/sessions" class="on">Sessions</a><a href="#" id="nav-tt" hidden>TeslaTrack</a></nav>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
@@ -376,6 +377,10 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
   }
   window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { if (data) renderChart(inPeriod()); }, 150); });
   load(); setInterval(load, 60000);
+  fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (st) {
+    var a = document.getElementById("nav-tt");
+    if (st.teslatrack_port) { a.hidden = false; a.href = location.protocol + "//" + location.hostname + ":" + st.teslatrack_port + "/"; }
+  }).catch(function () {});
 })();
 </script>
 </body>

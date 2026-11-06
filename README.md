@@ -12,17 +12,14 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Teslemetry if Bluetooth is busy or fails
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too
-* **Car tab** with Temps and Car charts over the last day, 3, 7, 30 or 90 days: cabin and outside temperature and battery level, plus range, odometer, distance driven and top speed today
-* **Tyres chart** of every reading over 3 or 7 days, or each tyre's daily average over 30 or 90 days, so a slow leak stands out
 * **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
-* **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, cost and money saved, with a CSV download
+* **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, energy that reached the battery, cost and money saved, with a CSV download
 * **Weather card** with the current conditions, today's high and low, and the next 12 hours: temperature, chance of rain and expected solar output
-* **Car status**: locks, doors, windows, Sentry, home or away, efficiency in Wh/km, charging losses and software updates, with notices such as a window left open when rain is forecast
-* **Battery health**: usable capacity logged from each full charge and cell balance, charted over months and years
-* **Away charging**: fast charger and public AC sessions are added to the Sessions page with an estimated cost
 * **Full charge tracker** for LFP batteries, which should reach 100% about once a week. It shows when the last one happened and suggests the sunniest day for the next, using a free solar forecast from Open Meteo
 * **Easy on the SD card:** routine readings live in RAM, only events and summaries are saved to disk
 * **Python standard library only**, nothing to install. Runs happily alongside Pihole on an old Pi
+
+For trips, battery health, tyres, temperatures and the car's status, see the companion app **[TeslaTrack](https://github.com/brad-24/teslatrack)**. They run side by side on the same Pi and link to each other.
 
 <img src="docs/phone.jpg" width="300" alt="Dashboard on a phone">
 
@@ -106,18 +103,9 @@ chmod 600 ~/.solarcharge_token
 
 Teslemetry also needs its virtual key added to the car. Follow the prompts in their console. Each command costs Teslemetry credits, so Bluetooth stays the main route.
 
-For live data on the dashboard, turn on these fields in the Teslemetry console under Telemetry Configuration (the stream never wakes the car or uses command credits, but fields not marked Free may need a higher plan):
+For live battery level, charge limit and time to full, turn on BatteryLevel, ChargeLimitSoc and TimeToFullCharge in the Teslemetry console under Telemetry Configuration. The stream never wakes the car or uses command credits. For energy that reached the battery on the Sessions page, also turn on ACChargingEnergyIn.
 
-| For | Fields |
-|---|---|
-| Charging | BatteryLevel, ChargeLimitSoc, TimeToFullCharge |
-| Temps chart | InsideTemp, OutsideTemp |
-| Car chart and tiles | RatedRange, Odometer, VehicleSpeed |
-| Tyres chart | TpmsPressureFl, TpmsPressureFr, TpmsPressureRl, TpmsPressureRr |
-| Battery health | EnergyRemaining, BrickVoltageMax, BrickVoltageMin |
-| Car status | Locked, DoorState, FdWindow, FpWindow, RdWindow, RpWindow, SentryMode, Version, SoftwareUpdateVersion |
-| Home or away | Location (used on the Pi only, learned from where the car is plugged into the Wall Charger, never shown or shared) |
-| Away charging and efficiency | FastChargerPresent, DCChargingEnergyIn, ACChargingEnergyIn |
+If TeslaTrack runs on the same Pi, set `teslatrack_url = http://localhost:8084` under `[tesla]` in config.ini and SolarCharge takes these values from TeslaTrack instead, so only one app holds the stream. TeslaTrack also tells SolarCharge which days the car is usually home, for the Full charge card.
 
 ## Run it as a service
 
