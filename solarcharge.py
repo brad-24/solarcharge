@@ -1215,6 +1215,9 @@ class Controller(object):
         self.not_charging_since = None
         self.self_started = False
         self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
+        self.own_use_until = 0.0         # a draw that carried on through a stop command: the car running itself
+        self.stop_at = 0.0               # when the last stop was sent
+        self.zero_since_stop = True      # the draw fell to nothing at some point after that stop
         self.cloud_cap_noted = False     # logged that today's Teslemetry amp increases are used up
         self.wc_plugged = False          # Wall Charger says the car is plugged in (so it's at home)
         self.tt_home_days = None         # weekdays the car is usually home, learned by TeslaTrack
@@ -1330,6 +1333,9 @@ class Controller(object):
     def _send(self, now, name, body=None):
         if now < self.cmd_block_until:
             return False
+        if name == "charge_stop":
+            self.stop_at = now
+            self.zero_since_stop = False
         if not self.dry_run:
             with self.lock:
                 snap = dict(self.snapshot)
@@ -1491,9 +1497,19 @@ class Controller(object):
             return
 
         # A plugged in car powers climate, Sentry and the like from the wall, which closes the
-        # contactor and draws a couple of amps. That isn't a charge, and a stop command won't end it,
-        # so leave it alone. A real charge the car starts by itself runs at its set amps (5 A or more).
-        small = actual and not self.on and chg["amps"] < s.min_amps - 0.5
+        # contactor and draws a few amps. That isn't a charge, and a stop command won't end it,
+        # so leave it alone. It counts as the car running itself when:
+        #   the draw is below the minimum charging amps, or
+        #   the battery is known to be at its charge limit, or
+        #   the draw carried on through a stop command without ever falling to nothing
+        if chg["amps"] < 0.5:
+            self.zero_since_stop = True
+            self.own_use_until = 0.0
+        if (actual and not self.on and not self.zero_since_stop and now - self.stop_at < 600
+                and chg["amps"] < 10 and now >= self.own_use_until):
+            self.own_use_until = now + s.no_charge_backoff
+        small = actual and not self.on and (chg["amps"] < s.min_amps - 0.5 or self._at_limit()
+                                            or now < self.own_use_until)
         if small and not self.small_draw:
             self.event("Car is drawing %.0f A to run itself (climate, battery cooling or staying awake), not charging. Leaving it alone"
                        % chg["amps"])
