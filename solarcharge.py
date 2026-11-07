@@ -1232,6 +1232,7 @@ class Controller(object):
         self.last_chg = None
         self.inv_ok = False
         self.chg_ok = False
+        self.chg_fails = 0
         self.reason = "Starting up"
         self.avg_avail = 0.0
         self.volts = s.nominal_volts
@@ -1408,10 +1409,17 @@ class Controller(object):
                 if not self.chg_ok:
                     self.event("Wall Charger readings OK")
                 self.chg_ok = True
+                self.chg_fails = 0
             except Exception as e:
-                if self.chg_ok or self.last_chg is None:
+                # The Wall Connector is on Wi-Fi and now and then misses one reading. Only report it
+                # once three in a row (about 30 seconds) have failed, or straight away at start up.
+                self.chg_fails = getattr(self, "chg_fails", 0) + 1
+                if self.chg_ok and (self.chg_fails >= 3 or self.last_chg is None):
                     self.event("Wall Charger read failed: %s" % e, logging.WARNING)
-                self.chg_ok = False
+                    self.chg_ok = False
+                elif self.last_chg is None and self.chg_fails == 1:
+                    self.event("Wall Charger read failed: %s" % e, logging.WARNING)
+                    self.chg_ok = False
             if chg is not None:
                 if self.last_chg is not None and chg["plugged"] != self.last_chg["plugged"]:
                     self.event("Car plugged in" if chg["plugged"] else "Car unplugged")
