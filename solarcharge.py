@@ -93,6 +93,19 @@ DEFAULTS = {
         # Bluetooth is unavailable. Starts, stops and decreases are never held back.
         "teslemetry_raises_per_day": "10",
     },
+    "fleet": {
+        # Tesla's own Fleet API, used when Bluetooth can't get through and before Teslemetry.
+        # Tesla bills about US$0.001 a command and gives every account US$10 a month, so it is
+        # free in practice. See FLEET.md for the one time setup.
+        "enabled": "false",
+        "client_id": "",
+        "client_secret": "",
+        "domain": "",
+        "redirect_uri": "",
+        "api_base": "https://fleet-api.prd.na.vn.cloud.tesla.com",
+        "key_file": "~/.solarcharge_fleet_key.pem",
+        "token_file": "~/.solarcharge_fleet.json",
+    },
     "control": {
         "dry_run": "true",
         "default_mode": "solar",
@@ -182,6 +195,16 @@ class Settings(object):
         self.ble_read_min = gf("ble", "read_battery_minutes")
         self.ble_fast = gb("ble", "fast_tracking")
         self.cloud_raises_day = gi("ble", "teslemetry_raises_per_day")
+
+        self.fleet = gb("fleet", "enabled")
+        self.fleet_client_id = g("fleet", "client_id").strip()
+        self.fleet_client_secret = g("fleet", "client_secret").strip()
+        self.fleet_domain = g("fleet", "domain").strip().replace("https://", "").strip("/")
+        self.fleet_redirect = g("fleet", "redirect_uri").strip() or (
+            "https://%s/callback" % self.fleet_domain if self.fleet_domain else "")
+        self.fleet_base = g("fleet", "api_base").strip().rstrip("/")
+        self.fleet_key = os.path.expanduser(g("fleet", "key_file").strip())
+        self.fleet_token_file = os.path.expanduser(g("fleet", "token_file").strip())
 
         self.dry_run = gb("control", "dry_run")
         self.default_mode = g("control", "default_mode").strip()
@@ -529,7 +552,7 @@ class BleTesla(object):
         self.last_error = ""
 
     def configured(self):
-        return bool(self.s.vin) and os.path.exists(self.s.ble_tool) and os.path.exists(self.s.ble_key)
+        return bool(self.s.ble and self.s.vin) and os.path.exists(self.s.ble_tool) and os.path.exists(self.s.ble_key)
 
     def _run(self, args, timeout=45):
         cmd = [self.s.ble_tool, "-ble", "-vin", self.s.vin, "-key-file", self.s.ble_key,
@@ -656,14 +679,149 @@ class BleTesla(object):
             return True, "car reached over Bluetooth"
 
 
+class FleetTesla(object):
+    """Tesla's own Fleet API, reached with the same tesla-control tool over the internet. Commands
+    are signed with SolarCharge's own key, which is added to the car once. Tesla bills about
+    US$0.001 a command (a wake about US$0.02), well inside the US$10 a month every account gets."""
+
+    AUTH_URL = "https://auth.tesla.com/oauth2/v3/authorize"
+    TOKEN_URL = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token"
+    SCOPES = "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds"
+
+    def __init__(self, s):
+        self.s = s
+        self.ok_count = 0
+        self.fail_count = 0
+        self.fail_streak = 0
+        self.wakes = 0
+        self.last_ok = 0.0
+        self.last_error = ""
+        self.access_file = self.s.fleet_token_file + ".access"
+        self.cache_file = self.s.fleet_token_file + ".session"
+
+    def configured(self):
+        s = self.s
+        return bool(s.fleet and s.vin and s.fleet_client_id and os.path.exists(s.ble_tool)
+                    and os.path.exists(s.fleet_key) and os.path.exists(s.fleet_token_file))
+
+    # tokens
+    def _load(self):
+        with open(self.s.fleet_token_file) as f:
+            return json.load(f)
+
+    @staticmethod
+    def _write_private(path, text):
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+
+    def save_tokens(self, resp):
+        tok = {"access_token": resp["access_token"], "refresh_token": resp["refresh_token"],
+               "expires_at": time.time() + float(resp.get("expires_in") or 28800)}
+        self._write_private(self.s.fleet_token_file, json.dumps(tok))
+        self._write_private(self.access_file, tok["access_token"])
+        return tok
+
+    @classmethod
+    def post_form(cls, url, fields, timeout=30):
+        from urllib.parse import urlencode
+        req = Request(url, data=urlencode(fields).encode(), method="POST",
+                      headers={"Content-Type": "application/x-www-form-urlencoded",
+                               "User-Agent": "solarcharge/%s" % VERSION})
+        try:
+            with urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode())
+        except HTTPError as e:
+            raise RuntimeError("HTTP %s %s" % (e.code, e.read().decode(errors="replace")[:300]))
+
+    def _access(self):
+        """A current access token in the file tesla-control reads, refreshed when close to expiry.
+        Refresh tokens are single use, so each new one is saved straight away."""
+        tok = self._load()
+        if tok.get("expires_at", 0) - time.time() < 600 or not os.path.exists(self.access_file):
+            resp = self.post_form(self.TOKEN_URL, {"grant_type": "refresh_token",
+                                                   "client_id": self.s.fleet_client_id,
+                                                   "refresh_token": tok["refresh_token"]})
+            tok = self.save_tokens(resp)
+            log.info("Tesla API login renewed")
+        return self.access_file
+
+    # commands
+    def _run(self, args, timeout=60):
+        try:
+            token_path = self._access()
+        except Exception as e:
+            return False, "login: %s" % e, ""
+        cmd = [self.s.ble_tool, "-vin", self.s.vin, "-key-file", self.s.fleet_key, "-token-file", token_path,
+               "-session-cache", self.cache_file, "-command-timeout", "20s"] + args
+        try:
+            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
+                               universal_newlines=True)
+        except subprocess.TimeoutExpired:
+            return False, "timed out", ""
+        except OSError as e:
+            return False, str(e), ""
+        err = (p.stderr or "").strip().replace("\n", " ")
+        return p.returncode == 0, err[-300:], (p.stdout or "").strip()
+
+    @staticmethod
+    def _asleep(err):
+        low = (err or "").lower()
+        return any(k in low for k in ("offline", "asleep", "408", "unavailable", "not online"))
+
+    def command(self, name, body=None):
+        if name == "set_charging_amps":
+            args = ["charging-set-amps", str(int((body or {}).get("charging_amps", 5)))]
+        elif name in BleTesla.ARGS:
+            args = list(BleTesla.ARGS[name])
+        else:
+            return False, "unsupported: " + name
+        ok, err, _ = self._run(args)
+        res = BleTesla._translate(self, name, ok, err)
+        if not res[0] and res[1] != "complete" and self._asleep(res[1]):
+            # the car is asleep: wake it over the internet and try once more
+            self.wakes += 1
+            self._run(["wake"], timeout=60)
+            time.sleep(20)
+            ok, err, _ = self._run(args)
+            res = BleTesla._translate(self, name, ok, err)
+        if res[0] or res[1] == "complete":
+            self.ok_count += 1
+            self.fail_streak = 0
+            self.last_ok = time.time()
+        else:
+            self.fail_count += 1
+            self.fail_streak += 1
+            self.last_error = res[1]
+        return res
+
+    def charge_state(self):
+        return None, "not read over the Tesla API"
+
+    def ping(self):
+        try:
+            self._access()
+            req = Request(self.s.fleet_base + "/api/1/vehicles", headers={
+                "Authorization": "Bearer " + open(self.access_file).read().strip()})
+            with urlopen(req, timeout=20) as r:
+                cars = json.loads(r.read().decode()).get("response") or []
+        except Exception as e:
+            return False, str(e)[:300]
+        mine = [c for c in cars if c.get("vin") == self.s.vin]
+        if not mine:
+            return False, "logged in, but the VIN in config.ini isn't on this Tesla account"
+        return True, "logged in, car is %s" % mine[0].get("state", "unknown")
+
+
 class CarControl(object):
     """Bluetooth first, Teslemetry as the backup. Backup is used for starts, stops and
     amp reductions only, so a Bluetooth problem can never strand the car charging from
     the grid, but routine amp increases don't spend credits."""
 
-    def __init__(self, ble, cloud, s):
+    def __init__(self, ble, cloud, s, fleet=None):
         self.ble = ble
         self.cloud = cloud
+        self.fleet = fleet
         self.s = s
         self.last_path = ""
         self.fallbacks = 0
@@ -671,44 +829,65 @@ class CarControl(object):
         self.busy_until = 0.0
 
     def configured(self):
-        return self.ble.configured() or self.cloud.configured()
+        return self.ble.configured() or self._fleet_ok() or self.cloud.configured()
 
-    def command(self, name, body=None):
-        if self.ble.configured() and time.time() < self.busy_until and \
-                self.s.ble_fallback and self.cloud.configured():
-            # the car's Bluetooth was full a moment ago (phone keys): don't waste time retrying
-            ok, err = self.cloud.command(name, body)
-            if ok:
-                self.last_path = "teslemetry"
-                self.fallbacks += 1
-                self._remember(name, body)
-            return ok, err
-        if self.ble.configured():
-            ok, err = self.ble.command(name, body)
-            if ok or err == "complete":
-                self.last_path = "bluetooth"
-                self._remember(name, body)
-                return ok, err
-            log.warning("Bluetooth %s failed: %s", name, err)
-            reducing = name == "set_charging_amps" and self.prev_amps is not None and \
-                int((body or {}).get("charging_amps", 0)) < self.prev_amps
-            busy = self.ble._busy(err)    # car's Bluetooth slots are full: Bluetooth can't be used right now
-            if busy:
-                self.busy_until = time.time() + 300
-                log.warning("Car's Bluetooth is full (phone keys nearby); using Teslemetry for the next 5 minutes")
-            if not (self.s.ble_fallback and self.cloud.configured() and
-                    (busy or name in ("charge_start", "charge_stop") or reducing)):
-                return False, "Bluetooth: " + err
-            log.warning("Using Teslemetry for %s instead", name)
-            self.fallbacks += 1
-        ok, err = self.cloud.command(name, body)
-        if ok:
-            self.last_path = "teslemetry"
+    def _fleet_ok(self):
+        return self.fleet is not None and self.fleet.configured()
+
+    def _done(self, path, name, body, ok, err):
+        if ok or err == "complete":
+            self.last_path = path
             self._remember(name, body)
         return ok, err
 
+    def command(self, name, body=None):
+        err = "not set up"
+        busy = False
+        if self.ble.configured():
+            if time.time() < self.busy_until:
+                # the car's Bluetooth was full a moment ago (phone keys): don't waste time retrying
+                busy = True
+            else:
+                ok, err = self.ble.command(name, body)
+                if ok or err == "complete":
+                    return self._done("bluetooth", name, body, ok, err)
+                log.warning("Bluetooth %s failed: %s", name, err)
+                err = "Bluetooth: " + err
+                if self.ble._busy(err):
+                    busy = True
+                    self.busy_until = time.time() + 300
+                    log.warning("Car's Bluetooth is full (phone keys nearby); using the backup for the next 5 minutes")
+
+        # Tesla's own API next: free in practice, so it can carry every kind of command
+        if self._fleet_ok():
+            ok, ferr = self.fleet.command(name, body)
+            if ok or ferr == "complete":
+                if self.ble.configured():
+                    self.fallbacks += 1
+                return self._done("fleet", name, body, ok, ferr)
+            log.warning("Tesla API %s failed: %s", name, ferr)
+            err = "Tesla API: " + ferr
+
+        # Teslemetry last, as it costs credits: starts, stops and decreases always (so a
+        # failure can never strand the car charging from the grid), increases only when
+        # Bluetooth is busy or not set up
+        reducing = name == "set_charging_amps" and self.prev_amps is not None and \
+            int((body or {}).get("charging_amps", 0)) < self.prev_amps
+        if not self.cloud.configured():
+            return False, err
+        if self.ble.configured() and not (self.s.ble_fallback and
+                                          (busy or name in ("charge_start", "charge_stop") or reducing)):
+            return False, err
+        if self.ble.configured() or self._fleet_ok():
+            log.warning("Using Teslemetry for %s instead", name)
+            self.fallbacks += 1
+        ok, cerr = self.cloud.command(name, body)
+        return self._done("teslemetry", name, body, ok, cerr)
+
     def cloud_only(self):
-        """True while commands would go through Teslemetry (and cost credits) instead of Bluetooth."""
+        """True while commands would go through Teslemetry (and cost credits) instead of a free route."""
+        if self._fleet_ok() and self.fleet.fail_streak < 2:
+            return False
         if not self.ble.configured():
             return True
         if not (self.s.ble_fallback and self.cloud.configured()):
@@ -731,6 +910,11 @@ class CarControl(object):
                 "ble_busy": self.ble.busy_count,
                 "ble_last_ok": self.ble.last_ok, "ble_error": self.ble.last_error,
                 "path": self.last_path, "fallbacks": self.fallbacks,
+                "fleet": self._fleet_ok(),
+                "fleet_ok": self.fleet.ok_count if self.fleet else 0,
+                "fleet_fail": self.fleet.fail_count if self.fleet else 0,
+                "fleet_wakes": self.fleet.wakes if self.fleet else 0,
+                "fleet_error": self.fleet.last_error if self.fleet else "",
                 "busy_until": self.busy_until}
 
 
@@ -1692,7 +1876,8 @@ class Controller(object):
                     new = want_amps
             if new is not None and self._send(now, "set_charging_amps", {"charging_amps": new}):
                 paid = getattr(self.tesla, "last_path", "teslemetry") == "teslemetry" and not self.simulated
-                self.event("Set amps %d to %d (%d W available)%s" % (self.amps, new, avg, " via Teslemetry" if paid else ""))
+                self.event("Set amps %d to %d (%d W available)%s" % (self.amps, new, avg, " via Teslemetry" if paid else (
+                    " via Tesla API" if getattr(self.tesla, "last_path", "") == "fleet" else "")))
                 if new > self.amps:
                     self.raises.append(now)
                     if paid:
@@ -2285,6 +2470,15 @@ def run_check(s):
                 cs, err = b.charge_state()
                 print("  Battery: %s" % (cs if cs else "not readable now (%s); fine if the car is asleep" % err))
 
+    if s.fleet:
+        print("\nTesla API")
+        f = FleetTesla(s)
+        if not f.configured():
+            print("  Not ready: run the steps in FLEET.md (key, register, login)")
+        else:
+            ok, msg = f.ping()
+            print(("  OK  " if ok else "  FAILED: ") + msg)
+
     print("\nTeslemetry")
     t = Teslemetry(s)
     if not s.vin:
@@ -2297,6 +2491,86 @@ def run_check(s):
     print()
 
 
+# ---------------------------------------------------------------- Tesla API setup
+
+def fleet_keygen(s):
+    """Make SolarCharge's Tesla API key (kept on the Pi) and print the public half to publish."""
+    if os.path.exists(s.fleet_key):
+        print("A key already exists at %s, keeping it." % s.fleet_key)
+    else:
+        old = os.umask(0o077)
+        try:
+            subprocess.check_call(["openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout",
+                                   "-out", s.fleet_key])
+        finally:
+            os.umask(old)
+        print("Made a new private key at %s. Keep it private." % s.fleet_key)
+    pub = subprocess.check_output(["openssl", "ec", "-in", s.fleet_key, "-pubout"],
+                                  stderr=subprocess.DEVNULL, universal_newlines=True)
+    print("\nPublish this public key (it is safe to share) at")
+    print("  https://%s/.well-known/appspecific/com.tesla.3p.public-key.pem\n" % (s.fleet_domain or "<your domain>"))
+    print(pub)
+
+
+def fleet_register(s):
+    """Check the public key is published, then register the domain with Tesla."""
+    if not (s.fleet_client_id and s.fleet_client_secret and s.fleet_domain):
+        sys.exit("Fill in client_id, client_secret and domain under [fleet] in config.ini first.")
+    url = "https://%s/.well-known/appspecific/com.tesla.3p.public-key.pem" % s.fleet_domain
+    mine = subprocess.check_output(["openssl", "ec", "-in", s.fleet_key, "-pubout"],
+                                   stderr=subprocess.DEVNULL, universal_newlines=True).strip()
+    try:
+        with urlopen(Request(url, headers={"User-Agent": "solarcharge"}), timeout=20) as r:
+            published = r.read().decode().strip()
+    except Exception as e:
+        sys.exit("Couldn't read %s (%s). Publish the public key there first." % (url, e))
+    if published.split() != mine.split():
+        sys.exit("The key at %s doesn't match %s. Publish the output of --fleet-keygen." % (url, s.fleet_key))
+    print("Public key found at %s and matches." % url)
+    tok = FleetTesla.post_form(FleetTesla.TOKEN_URL, {
+        "grant_type": "client_credentials", "client_id": s.fleet_client_id,
+        "client_secret": s.fleet_client_secret, "audience": s.fleet_base,
+        "scope": "openid vehicle_device_data vehicle_cmds vehicle_charging_cmds"})
+    req = Request(s.fleet_base + "/api/1/partner_accounts", method="POST",
+                  data=json.dumps({"domain": s.fleet_domain}).encode(),
+                  headers={"Authorization": "Bearer " + tok["access_token"], "Content-Type": "application/json"})
+    try:
+        with urlopen(req, timeout=30) as r:
+            r.read()
+    except HTTPError as e:
+        sys.exit("Tesla refused the registration: HTTP %s %s" % (e.code, e.read().decode(errors="replace")[:300]))
+    print("Registered %s with Tesla. Next: python3 %s --fleet-login" % (s.fleet_domain, os.path.abspath(__file__)))
+
+
+def fleet_login(s):
+    """Sign in to your Tesla account once and save the login, which SolarCharge then renews itself."""
+    from urllib.parse import urlencode
+    if not (s.fleet_client_id and s.fleet_client_secret and s.fleet_redirect):
+        sys.exit("Fill in client_id, client_secret and domain under [fleet] in config.ini first.")
+    state = "%016x" % random.getrandbits(64)
+    url = FleetTesla.AUTH_URL + "?" + urlencode({
+        "response_type": "code", "client_id": s.fleet_client_id, "redirect_uri": s.fleet_redirect,
+        "scope": FleetTesla.SCOPES, "state": state, "prompt_missing_scopes": "true"})
+    print("1. Open this link in a browser and sign in to your Tesla account:\n\n%s\n" % url)
+    print("2. Allow the access it asks for. You'll land on a 'page not found' at %s." % s.fleet_domain)
+    print("   That's expected. Copy the whole address from the address bar.\n")
+    back = input("3. Paste the address here and press Enter: ").strip()
+    q = parse_qs(urlparse(back).query)
+    if q.get("state", [""])[0] != state or not q.get("code"):
+        sys.exit("That address doesn't hold a fresh sign in code. Run --fleet-login again.")
+    resp = FleetTesla.post_form(FleetTesla.TOKEN_URL, {
+        "grant_type": "authorization_code", "client_id": s.fleet_client_id,
+        "client_secret": s.fleet_client_secret, "code": q["code"][0], "audience": s.fleet_base,
+        "redirect_uri": s.fleet_redirect, "scope": FleetTesla.SCOPES})
+    if "refresh_token" not in resp:
+        sys.exit("Tesla didn't return a lasting login: %s" % str(resp)[:300])
+    FleetTesla(s).save_tokens(resp)
+    print("\nSigned in. Login saved to %s (private)." % s.fleet_token_file)
+    print("\n4. Last step: on your phone, open https://tesla.com/_ak/%s" % s.fleet_domain)
+    print("   and approve the key in the Tesla app (the car needs to be online).")
+    print("\nThen set enabled = true under [fleet], and run --check.")
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -2305,9 +2579,15 @@ def main():
     ap.add_argument("--check", action="store_true", help="read each device once and exit")
     ap.add_argument("--simulate", action="store_true", help="use fake devices")
     ap.add_argument("--speed", type=float, default=1.0, help="clock speed in simulate mode")
+    ap.add_argument("--fleet-keygen", action="store_true", help="Tesla API setup: make the key")
+    ap.add_argument("--fleet-register", action="store_true", help="Tesla API setup: register your domain")
+    ap.add_argument("--fleet-login", action="store_true", help="Tesla API setup: sign in once")
     args = ap.parse_args()
 
     s = Settings(args.config)
+    if args.fleet_keygen or args.fleet_register or args.fleet_login:
+        (fleet_keygen if args.fleet_keygen else fleet_register if args.fleet_register else fleet_login)(s)
+        return
 
     if not s.inv_host and not args.simulate:
         sys.exit("Set the inverter's IP address under [inverter] host in %s first." % args.config)
@@ -2336,8 +2616,9 @@ def main():
         inverter = Inverter(s)
         charger = WallConnector(s) if s.charger_host else None
         tesla = Teslemetry(s)
-        if s.ble:
-            tesla = CarControl(BleTesla(s), tesla, s)
+        fleet = FleetTesla(s) if s.fleet else None
+        if s.ble or fleet:
+            tesla = CarControl(BleTesla(s), tesla, s, fleet)
             if s.ble_fast:
                 # commands are free over Bluetooth, so follow the sun more closely
                 s.up_interval = min(s.up_interval, 90)

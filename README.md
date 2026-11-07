@@ -9,7 +9,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 ## Features
 
 * **Solar surplus charging** that follows the sun: starts when there is enough spare solar, raises and lowers the amps as clouds come and go, and stops when the surplus runs out
-* **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Teslemetry if Bluetooth is busy or fails
+* **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Tesla's own API or Teslemetry if Bluetooth is busy or fails
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too
 * **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
@@ -107,6 +107,10 @@ For live battery level, charge limit and time to full, turn on BatteryLevel, Cha
 
 If TeslaTrack runs on the same Pi, set `teslatrack_url = http://localhost:8084` under `[tesla]` in config.ini and SolarCharge takes these values from TeslaTrack instead, so only one app holds the stream. TeslaTrack also tells SolarCharge which days the car is usually home, for the Full charge card.
 
+## Optional: Tesla API backup
+
+Tesla's own Fleet API can be a free backup between Bluetooth and Teslemetry, so commands rarely cost credits even when phone keys fill the car's Bluetooth slots. See [FLEET.md](FLEET.md).
+
 ## Run it as a service
 
 The service file assumes the user `pi` and the folder `/home/pi/solarcharge`. Edit it first if yours differ.
@@ -175,7 +179,7 @@ The dashboard has **no login** and can start and stop charging. **Never** open p
 | `data/archive/` | permanent archive: daily totals and minute by minute data, one CSV per month, written just after midnight (about 20 MB a year). Download from the dashboard under Daily totals |
 | `/dev/shm/solarcharge/` | every reading (RAM only, cleared on reboot) |
 
-Keep `config.ini`, `data/`, `~/.solarcharge_token` and `~/.solarcharge_ble_key.pem` private.
+Keep `config.ini`, `data/`, `~/.solarcharge_token`, `~/.solarcharge_ble_key.pem` and the `~/.solarcharge_fleet*` files private.
 
 ## Disclaimer
 
