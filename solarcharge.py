@@ -1487,7 +1487,7 @@ class Controller(object):
         # so leave it alone. A real charge the car starts by itself runs at its set amps (5 A or more).
         small = actual and not self.on and chg["amps"] < s.min_amps - 0.5
         if small and not self.small_draw:
-            self.event("Car is drawing %.0f A for its own use (climate or Sentry), not charging. Leaving it alone"
+            self.event("Car is drawing %.0f A to run itself (climate, battery cooling or staying awake), not charging. Leaving it alone"
                        % chg["amps"])
         self.small_draw = small
         if small:
