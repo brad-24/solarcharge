@@ -88,7 +88,18 @@ tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
 .pill.away { color: var(--accent); }
 .pill.sc { color: var(--crit); }
-.tiles.three { grid-template-columns: repeat(3, 1fr); }
+.todaybar { display: flex; align-items: baseline; gap: 10px 32px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 14px; }
+.todaybar h2 { margin: 0; min-width: 52px; }
+.todaybar .tb { display: inline-flex; align-items: baseline; gap: 6px; }
+.todaybar .tv { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.todaybar .tv small { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 2px; }
+.todaybar .tl { font-size: 13px; color: var(--text-2); }
+@media (max-width: 480px) { .todaybar { gap: 8px 18px; } .todaybar h2 { width: 100%; } }
+@media (max-width: 480px) {
+  .toolbar .seg { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+  .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
+  .toolbar .btn { margin-left: auto; }
+}
 .exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
 .exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
 .exports a:hover { text-decoration: underline; }
@@ -125,10 +136,11 @@ nav a[hidden] { display: none !important; }
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
-  <section class="tiles three">
-    <div class="card tile"><div class="label">Car charged today</div><div class="value" id="d-car">&nbsp;</div></div>
-    <div class="card tile"><div class="label">Car from solar today</div><div class="value" id="d-share">&nbsp;</div></div>
-    <div class="card tile"><div class="label">Starts / stops today</div><div class="value" id="d-ss">&nbsp;</div></div>
+  <section class="card todaybar" aria-label="Today">
+    <h2>Today</h2>
+    <div class="tb"><span class="tv" id="d-car">&nbsp;</span><span class="tl">charged</span></div>
+    <div class="tb"><span class="tv" id="d-share">&nbsp;</span><span class="tl">from solar</span></div>
+    <div class="tb"><span class="tv" id="d-ss">&nbsp;</span><span class="tl">starts / stops</span></div>
   </section>
 
   <div class="toolbar">
