@@ -52,7 +52,7 @@ nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--sha
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
 .btn { margin-left: auto; font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .btn:hover { border-color: var(--text-3); }
-.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }
 @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 .tile .label { font-size: 12px; color: var(--text-2); }
@@ -96,7 +96,7 @@ tr.live td { color: var(--text); }
 .todaybar .tl { font-size: 13px; color: var(--text-2); }
 @media (max-width: 480px) { .todaybar { gap: 8px 18px; } .todaybar h2 { width: 100%; } }
 @media (max-width: 480px) {
-  .toolbar .seg { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+  .toolbar .seg { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
   .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
   .toolbar .btn { margin-left: auto; }
 }
@@ -142,6 +142,7 @@ nav a[hidden] { display: none !important; }
 
   <div class="toolbar">
     <div class="seg" id="period">
+      <button type="button" data-p="today">Today</button>
       <button type="button" data-p="month" class="on">This month</button>
       <button type="button" data-p="last">Last month</button>
       <button type="button" data-p="year">This year</button>
@@ -158,7 +159,8 @@ nav a[hidden] { display: none !important; }
     <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">&nbsp;</div><div class="sub" id="t-costsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Saved by solar</div><div class="value" id="t-saved">&nbsp;</div><div class="sub">vs charging from the grid</div></div>
     <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label">Efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Trip efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Overall efficiency</div><div class="value" id="t-oeff">&nbsp;</div><div class="sub" id="t-oeffsub">&nbsp;</div></div>
     <div class="card tile"><div class="label" id="t-fuellbl">Compared with fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
   </section>
 
@@ -217,6 +219,7 @@ nav a[hidden] { display: none !important; }
 
   function range(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    if (p === "today") return [new Date(y, m, now.getDate()), new Date(y, m, now.getDate() + 1)];
     if (p === "month") return [new Date(y, m, 1), new Date(y, m + 1, 1)];
     if (p === "last") return [new Date(y, m - 1, 1), new Date(y, m, 1)];
     if (p === "year") return [new Date(y, 0, 1), new Date(y + 1, 0, 1)];
@@ -238,8 +241,8 @@ nav a[hidden] { display: none !important; }
     var all = inPeriod();
     var live = all.filter(function (s) { return s.live; });
     var list = all.filter(function (s) { return !s.live; });
-    var n = list.length, total = sum(list, "kwh"), solar = sum(list, "solar_kwh"), grid = sum(list, "grid_kwh");
-    var cost = sum(list, "cost"), saved = sum(list, "saved"), chg = sum(list, "charge_min");
+    var n = all.length, total = sum(all, "kwh"), solar = sum(all, "solar_kwh"), grid = sum(all, "grid_kwh");
+    var cost = sum(all, "cost"), saved = sum(all, "saved"), chg = sum(all, "charge_min");
     $("t-n").textContent = n;
     $("t-nsub").textContent = n ? dur(chg) + " charging" : " ";
     $("t-kwh").innerHTML = kwh(total) + "<small>kWh</small>";
@@ -252,7 +255,7 @@ nav a[hidden] { display: none !important; }
     $("t-saved").textContent = money(saved);
     renderFuel(cost, total);
     renderTable(list, live);
-    renderChart(list);
+    renderChart(all);
   }
 
   // distance from the car's odometer (TeslaTrack), and what the same kilometres would cost in fuel
@@ -278,6 +281,7 @@ nav a[hidden] { display: none !important; }
       $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
       $("t-eff").innerHTML = "<span class='muted'>n/a</span>"; $("t-effsub").innerHTML = "&nbsp;";
+      $("t-oeff").innerHTML = "<span class='muted'>n/a</span>"; $("t-oeffsub").innerHTML = "&nbsp;";
     };
     if (!dist || dist.now == null || !dist.days) return na("needs TeslaTrack");
     var r = range(period), now = new Date();
@@ -292,14 +296,15 @@ nav a[hidden] { display: none !important; }
     // the charged energy per km is higher, as it also covers charging losses and the car's use while parked
     var ra = r[0].getTime() / 1000, rb = r[1].getTime() / 1000, tk = 0, te = 0;
     (dist.trips || []).forEach(function (t) { if (t[0] >= ra && t[0] < rb) { tk += t[1]; te += t[2]; } });
-    var wall = km >= 20 && total > 0 ? 100 * total / km : null;
-    if (tk >= 20) {
+    var na2 = "<span class='muted'>n/a</span>";
+    if (tk >= 5) {
       $("t-eff").innerHTML = (100 * te / tk).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = "driving, from the battery" + (wall ? ". Charged: " + wall.toFixed(1) + " incl. losses and use while parked" : "");
-    } else if (wall) {
-      $("t-eff").innerHTML = wall.toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = "charged per km, incl. losses and use while parked";
-    } else { $("t-eff").innerHTML = "<span class='muted'>n/a</span>"; $("t-effsub").textContent = "needs more driving"; }
+      $("t-effsub").textContent = "driving only, from the battery on " + Math.round(tk) + " km of trips";
+    } else { $("t-eff").innerHTML = na2; $("t-effsub").textContent = "no trips recorded in this period"; }
+    if (km >= 20 && total > 0) {
+      $("t-oeff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
+      $("t-oeffsub").textContent = "everything charged, incl. losses and use while parked";
+    } else { $("t-oeff").innerHTML = na2; $("t-oeffsub").textContent = "needs more driving"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
     $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
