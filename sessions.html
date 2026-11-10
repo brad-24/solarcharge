@@ -103,9 +103,6 @@ tr.live td { color: var(--text); }
 .exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
 .exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
 .exports a:hover { text-decoration: underline; }
-table.days th, table.days td { text-align: right; }
-table.days th:first-child, table.days td:first-child { text-align: left; }
-@media (max-width: 700px) { table.days th { white-space: normal; } }
 .share { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .share .bar { width: 46px; height: 6px; border-radius: 3px; background: var(--s-grid); overflow: hidden; display: inline-block; }
 .share .bar i { display: block; height: 100%; background: var(--s-solar); }
@@ -183,15 +180,6 @@ nav a[hidden] { display: none !important; }
           <th>Cost</th><th class="hide-sm">Saved</th>
         </tr></thead>
         <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
-  <section class="card" style="margin-top:14px">
-    <div class="charthead"><h2>Daily totals</h2></div>
-    <div class="tablewrap">
-      <table class="days">
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Grid kWh</th></tr></thead>
-        <tbody id="days"></tbody>
       </table>
     </div>
     <div class="exports" id="exports"></div>
@@ -282,7 +270,7 @@ nav a[hidden] { display: none !important; }
           "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
           "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw ? s.peak_kw.toFixed(1) : "<span class='muted'>n/a</span>") +
           "</td><td class='hide-sm'>" + (s.batt_kwh ? kwh(s.batt_kwh) + (s.eff_pct ? " <span class='muted'>(" + s.eff_pct + "%)</span>" : "") : "<span class='muted'>n/a</span>") +
-          "</td><td>" + money(s.cost) + (s.away ? " <span class='muted' title='Estimated from the away charging prices in config.ini'>est.</span>" : "") +
+          "</td><td>" + money(s.cost) + (s.away && !s.actual ? " <span class='muted' title='Estimated from the away charging prices in TeslaTrack's config.ini'>est.</span>" : "") +
           "</td><td class='hide-sm'>" + money(s.saved) + "</td></tr>";
         return html;
   }
@@ -423,20 +411,11 @@ nav a[hidden] { display: none !important; }
     }).catch(function () {});
   }
   function loadDays() {
-    fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (dd) {
-      var keys = Object.keys(dd).sort().reverse().slice(0, 14);
-      $("days").innerHTML = keys.map(function (k) {
-        var x = dd[k], share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
-        var label = new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + (x.car_wh / 1000).toFixed(1) + "</td><td>" + share +
-          "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
-      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
-    }).catch(function () {});
     fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
       var daily = files.indexOf("daily.csv") >= 0;
       var months = files.filter(function (f) { return /^minutes-\d{4}-\d{2}\.csv$/.test(f); });
       if (!daily && !months.length) {
-        $("exports").textContent = "Downloads appear here after the first full day is archived (just after midnight).";
+        $("exports").textContent = "Daily totals and minute data downloads appear here after the first full day is archived (just after midnight).";
         return;
       }
       $("exports").innerHTML = "Download: " + (daily ? "<a href='/export/daily.csv' download>Daily totals (CSV)</a>" : "") +

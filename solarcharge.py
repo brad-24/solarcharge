@@ -2271,6 +2271,7 @@ class Controller(object):
                          "charge_min": mins, "plugged_min": mins, "peak_kw": None, "batt_kwh": kwh, "eff_pct": None,
                          "cost": a.get("cost") or 0.0, "saved": 0.0, "away": True, "kind": a.get("kind", "dc"),
                          "supercharger": bool(a.get("supercharger")) or "supercharger" in place.lower(),
+                         "actual": bool(a.get("actual")),
                          "place": place})
         done.sort(key=lambda x: x["start"])
         return {"sessions": done, "current": cur,
