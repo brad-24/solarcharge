@@ -96,7 +96,7 @@ tr.live td { color: var(--text); }
 .todaybar .tl { font-size: 13px; color: var(--text-2); }
 @media (max-width: 480px) { .todaybar { gap: 8px 18px; } .todaybar h2 { width: 100%; } }
 @media (max-width: 480px) {
-  .toolbar .seg { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
+  .toolbar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
   .toolbar .btn { margin-left: auto; }
 }
@@ -143,6 +143,7 @@ nav a[hidden] { display: none !important; }
   <div class="toolbar">
     <div class="seg" id="period">
       <button type="button" data-p="today">Today</button>
+      <button type="button" data-p="week">This week</button>
       <button type="button" data-p="month" class="on">This month</button>
       <button type="button" data-p="last">Last month</button>
       <button type="button" data-p="year">This year</button>
@@ -220,6 +221,10 @@ nav a[hidden] { display: none !important; }
   function range(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
     if (p === "today") return [new Date(y, m, now.getDate()), new Date(y, m, now.getDate() + 1)];
+    if (p === "week") {   // Monday to Sunday
+      var mon = now.getDate() - ((now.getDay() + 6) % 7);
+      return [new Date(y, m, mon), new Date(y, m, mon + 7)];
+    }
     if (p === "month") return [new Date(y, m, 1), new Date(y, m + 1, 1)];
     if (p === "last") return [new Date(y, m - 1, 1), new Date(y, m, 1)];
     if (p === "year") return [new Date(y, 0, 1), new Date(y + 1, 0, 1)];
