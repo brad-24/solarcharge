@@ -288,9 +288,17 @@ nav a[hidden] { display: none !important; }
     var km = Math.max(0, b[0] - a[0]), est = a[1] || b[1];
     $("t-km").innerHTML = Math.round(km).toLocaleString() + "<small>km" + (est ? " est." : "") + "</small>";
     $("t-kmsub").textContent = km >= 1 ? (100 * cost / km).toFixed(1) + "c per km to charge" : "no driving recorded";
-    if (km >= 20 && total > 0) {
-      $("t-eff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = "energy charged per distance, incl. charging losses";
+    // driving efficiency from the car's own battery use on each trip (TeslaTrack), like the car shows;
+    // the charged energy per km is higher, as it also covers charging losses and the car's use while parked
+    var ra = r[0].getTime() / 1000, rb = r[1].getTime() / 1000, tk = 0, te = 0;
+    (dist.trips || []).forEach(function (t) { if (t[0] >= ra && t[0] < rb) { tk += t[1]; te += t[2]; } });
+    var wall = km >= 20 && total > 0 ? 100 * total / km : null;
+    if (tk >= 20) {
+      $("t-eff").innerHTML = (100 * te / tk).toFixed(1) + "<small>kWh/100 km</small>";
+      $("t-effsub").textContent = "driving, from the battery" + (wall ? ". Charged: " + wall.toFixed(1) + " incl. losses and use while parked" : "");
+    } else if (wall) {
+      $("t-eff").innerHTML = wall.toFixed(1) + "<small>kWh/100 km</small>";
+      $("t-effsub").textContent = "charged per km, incl. losses and use while parked";
     } else { $("t-eff").innerHTML = "<span class='muted'>n/a</span>"; $("t-effsub").textContent = "needs more driving"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
