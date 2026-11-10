@@ -889,7 +889,7 @@ ul.events.tall { max-height: 640px; }
       tip.innerHTML = "<div class='t'>" + new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
         (row ? ESER.map(function (s) {
           return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + ((row[s.key] || 0) / 1000).toFixed(1) + " kWh</b></div>";
-        }).join(""))
+        }).join("")
           : "<div class='muted'>No data</div>");
       tip.style.display = "block";
       var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
