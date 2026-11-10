@@ -1463,10 +1463,71 @@ class Controller(object):
         with self.lock:
             return self.snapshot
 
-    def get_history(self, minutes):
+    def get_history(self, minutes, points=0):
+        """Minute rows [time, solar, house, car, grid, amps]. Beyond what is held in RAM, older
+        minutes come from the monthly archive. With points, rows are averaged into that many buckets."""
         with self.lock:
             h = list(self.history)
-        return h[-minutes:] if minutes > 0 else h
+        if minutes <= 0:
+            return h
+        now = self.clock()
+        start = now - minutes * 60
+        if not h or h[0][0] > start + 300:
+            h = self._archive_rows(start, h[0][0] if h else now) + h
+        h = [r for r in h if r[0] >= start]
+        if points and len(h) > points:
+            step = int(math.ceil(minutes * 60.0 / points / 60.0)) * 60
+            out, cur, acc = [], None, None
+            for r in h:
+                b = int(r[0] // step) * step
+                if b != cur:
+                    if acc:
+                        n = acc[0]
+                        out.append([cur] + [int(v / n) for v in acc[1:5]] + [round(acc[5] / n, 1)])
+                    cur, acc = b, [0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                acc[0] += 1
+                for i in range(1, 6):
+                    acc[i] += r[i]
+            if acc:
+                n = acc[0]
+                out.append([cur] + [int(v / n) for v in acc[1:5]] + [round(acc[5] / n, 1)])
+            h = out
+        return h
+
+    _arch_cache = {}
+
+    def _archive_rows(self, start, end):
+        """Minute rows between start and end from the monthly archive files, cached by file."""
+        rows = []
+        if not self.store:
+            return rows
+        d = datetime.fromtimestamp(start).date().replace(day=1)
+        last = datetime.fromtimestamp(end).date()
+        while d <= last:
+            path = os.path.join(self.store.archive_dir, "minutes-%s.csv" % d.strftime("%Y-%m"))
+            d = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+            try:
+                mt = os.path.getmtime(path)
+            except OSError:
+                continue
+            hit = self._arch_cache.get(path)
+            if not hit or hit[0] != mt:
+                parsed = []
+                with open(path) as f:
+                    f.readline()
+                    for line in f:
+                        c = line.rstrip("\n").split(",")
+                        try:
+                            t = time.mktime(time.strptime(c[0], "%Y-%m-%d %H:%M"))
+                            # file: time, solar, house, grid, car, amps
+                            parsed.append([int(t), int(float(c[1] or 0)), int(float(c[2] or 0)),
+                                           int(float(c[4] or 0)), int(float(c[3] or 0)), float(c[5] or 0)])
+                        except (ValueError, IndexError):
+                            continue
+                hit = (mt, parsed)
+                self._arch_cache[path] = hit
+            rows.extend(r for r in hit[1] if start <= r[0] < end)
+        return rows
 
     def get_days(self):
         with self.lock:
@@ -2417,9 +2478,10 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             try:
                 minutes = int(q.get("minutes", ["1440"])[0])
+                points = int(q.get("points", ["0"])[0])
             except ValueError:
-                minutes = 1440
-            self._json(c.get_history(minutes))
+                minutes, points = 1440, 0
+            self._json(c.get_history(min(minutes, 60 * 24 * 400), min(max(points, 0), 5000)))
         elif u.path == "/api/sessions":
             self._json(c.get_sessions())
         elif u.path == "/api/export":

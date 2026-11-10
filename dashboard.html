@@ -25,6 +25,8 @@
   --s-solar: #eb6834;
   --s-car: #1baf7a;
   --s-cabin: #7a4fd4;
+  --e-export: #1597a5;
+  --e-grid: #7a4fd4;
   --wx-lo: #2f8fbf;
   --wx-hi: #c97a12;
   --wx-rain: #2a7fc9;
@@ -53,6 +55,8 @@
     --s-solar: #d95926;
     --s-car: #199e70;
     --s-cabin: #a17ff0;
+    --e-export: #2bbac7;
+    --e-grid: #a17ff0;
     --wx-lo: #9fd4ec;
     --wx-hi: #f0b45a;
     --wx-rain: #7dbcf0;
@@ -80,6 +84,8 @@
   --s-solar: #d95926;
   --s-car: #199e70;
   --s-cabin: #a17ff0;
+  --e-export: #2bbac7;
+  --e-grid: #a17ff0;
   --wx-lo: #9fd4ec;
   --wx-hi: #f0b45a;
   --wx-rain: #7dbcf0;
@@ -257,6 +263,8 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .range { margin-left: auto; display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; }
 .range button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-2);
   padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.range button { white-space: nowrap; }
+@media (max-width: 600px) { .range button { padding-left: 7px; padding-right: 7px; font-size: 12px; } }
 .range button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .chart { position: relative; height: 280px; }
 .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -276,6 +284,9 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tip .r { display: flex; align-items: center; gap: 7px; }
 .tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart.short { height: 220px; }
+.chart .bar { shape-rendering: crispEdges; }
+.chart .dayhit { fill: transparent; }
+.chart .dayhit.on { fill: var(--text); opacity: .05; }
 .swatch.dashed { height: 3px; width: 14px; border-radius: 0; background: repeating-linear-gradient(90deg, var(--dash, var(--text-3)) 0 4px, transparent 4px 7px) !important; }
 .carstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
 .carstats[hidden] { display: none; }
@@ -396,7 +407,7 @@ ul.events.tall { max-height: 640px; }
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav" id="nav"><a href="#dashboard" data-tab="dashboard" class="on">Dashboard</a><a href="#status" data-tab="status">Status</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a></nav>
+    <nav class="nav" id="nav"><a href="#dashboard" data-tab="dashboard" class="on">Dashboard</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a><a href="#status" data-tab="status">Status</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
@@ -527,9 +538,30 @@ ul.events.tall { max-height: 640px; }
         <button type="button" data-min="720">12 h</button>
         <button type="button" data-min="1440" class="on">24 h</button>
         <button type="button" data-min="4320">3 d</button>
+        <button type="button" data-min="10080">7 d</button>
+        <button type="button" data-min="20160">14 d</button>
+        <button type="button" data-min="43200">30 d</button>
       </div>
     </div>
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="charthead">
+      <h2>Daily energy</h2>
+      <div class="legendrow">
+        <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
+        <span><span class="swatch" style="background:var(--e-export)"></span>Exported</span>
+        <span><span class="swatch" style="background:var(--e-grid)"></span>From grid</span>
+      </div>
+      <div class="range" id="erange">
+        <button type="button" data-d="bill" class="on">This bill</button>
+        <button type="button" data-d="14">14 d</button>
+        <button type="button" data-d="30">30 d</button>
+      </div>
+    </div>
+    <div class="chart short" id="echart"><div class="tip" id="etip"></div></div>
+    <div class="chartnote" id="enote"></div>
   </section>
 
   <section class="grid bottom">
@@ -546,7 +578,7 @@ ul.events.tall { max-height: 640px; }
     <div class="card">
       <h2>Daily totals</h2>
       <table>
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Import kWh</th></tr></thead>
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Grid kWh</th></tr></thead>
         <tbody id="days"></tbody>
       </table>
       <div class="exports" id="exports"></div>
@@ -726,7 +758,7 @@ ul.events.tall { max-height: 640px; }
   }
   function pollHistory() {
     fetch("/api/history?minutes=4320", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (h) { history = h || []; drawChart(); }).catch(function () {});
+      .then(function (h) { history = h || []; loadLong(); drawChart(); }).catch(function () {});
   }
   function pollExports() {
     fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
@@ -745,6 +777,7 @@ ul.events.tall { max-height: 640px; }
   }
   function pollDays() {
     fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      daysData = d; drawEnergy();
       var keys = Object.keys(d).sort().reverse().slice(0, 14);
       $("days").innerHTML = keys.map(function (k) {
         var x = d[k], car = x.car_wh / 1000, share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
@@ -764,14 +797,113 @@ ul.events.tall { max-height: 640px; }
     Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab]"), function (a) {
       a.classList.toggle("on", a.getAttribute("data-tab") === t);
     });
-    if (t === "meter") { drawChart(); pollBill(); pollDays(); }
+    if (t === "meter") { drawChart(); drawEnergy(); pollBill(); pollDays(); }
   }
   window.addEventListener("hashchange", function () { showTab(); window.scrollTo(0, 0); });
+
+  // ---- daily energy: solar made, exported and taken from the grid, per day
+  var eRange = "bill", daysData = null, lastBill = null;
+  var ESER = [
+    { key: "pv_wh", name: "Solar", color: "--s-solar" },
+    { key: "export_wh", name: "Exported", color: "--e-export" },
+    { key: "import_wh", name: "From grid", color: "--e-grid" }
+  ];
+  function isoDay(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function drawEnergy() {
+    var box = $("echart"), tip = $("etip");
+    if (!box.clientWidth || !daysData) return;
+    var old = box.querySelector("svg"); if (old) old.remove();
+    var oldE = box.querySelector(".empty"); if (oldE) oldE.remove();
+    var today = new Date(), start = new Date();
+    if (eRange === "bill") {
+      if (!lastBill) return;
+      start = new Date(lastBill.start + "T12:00:00");
+    } else start.setDate(today.getDate() - parseInt(eRange, 10) + 1);
+    var keys = [];
+    for (var d = new Date(start.getTime()); isoDay(d) <= isoDay(today); d.setDate(d.getDate() + 1)) keys.push(isoDay(d));
+    var have = keys.filter(function (k) { return daysData[k]; });
+    if (!have.length) {
+      var e = document.createElement("div"); e.className = "empty"; e.textContent = "No daily totals for this period yet";
+      box.appendChild(e); $("enote").textContent = ""; return;
+    }
+    var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 8, mt = 10, mb = 26, iw = W - ml - mr, ih = H - mt - mb;
+    var ymax = 0;
+    have.forEach(function (k) { ESER.forEach(function (s) { ymax = Math.max(ymax, (daysData[k][s.key] || 0) / 1000); }); });
+    var steps = [1, 2, 5, 10, 20, 25, 50, 100], raw = ymax / 4, st = 100;
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= raw) { st = steps[i]; break; }
+    ymax = Math.max(st * 4, 4);
+    var gw = iw / keys.length, bw = Math.max(1.5, Math.min(14, gw * 0.78 / 3));
+    var y = function (v) { return mt + ih - v / ymax * ih; };
+    var html = "<g class='axis'>";
+    for (i = 0; i <= 4; i++) {
+      var v = ymax * i / 4, yy = y(v);
+      html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
+      html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + v + " kWh</text>";
+    }
+    var every = Math.max(1, Math.ceil(keys.length / Math.max(1, Math.floor(iw / 52))));
+    keys.forEach(function (k, n) {
+      if (n % every) return;
+      html += "<text x='" + (ml + gw * (n + 0.5)) + "' y='" + (H - 6) + "' text-anchor='middle'>" +
+        new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }) + "</text>";
+    });
+    html += "</g>";
+    keys.forEach(function (k, n) {
+      var x0 = ml + gw * (n + 0.5) - bw * 1.5, row = daysData[k];
+      html += "<rect class='dayhit' data-n='" + n + "' x='" + (ml + gw * n) + "' y='" + mt + "' width='" + gw + "' height='" + ih + "'/>";
+      if (!row) return;
+      ESER.forEach(function (s, j) {
+        var val = (row[s.key] || 0) / 1000, top = y(val);
+        html += "<rect class='bar' x='" + (x0 + j * bw).toFixed(1) + "' y='" + top.toFixed(1) + "' width='" + (bw - (bw > 4 ? 1 : 0)).toFixed(1) +
+          "' height='" + Math.max(0, mt + ih - top).toFixed(1) + "' style='fill:var(" + s.color + ")' pointer-events='none'/>";
+      });
+    });
+    var NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Solar, exported and grid energy per day");
+    svg.innerHTML = html;
+    box.insertBefore(svg, tip);
+    var on = null;
+    function show(ev) {
+      var r = svg.getBoundingClientRect(), cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      var n = Math.floor((cx - ml) / gw);
+      if (n < 0 || n >= keys.length) return hide();
+      var k = keys[n], row = daysData[k];
+      if (on) on.classList.remove("on");
+      on = svg.querySelector(".dayhit[data-n='" + n + "']"); on.classList.add("on");
+      tip.innerHTML = "<div class='t'>" + new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
+        (row ? ESER.map(function (s) {
+          return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + ((row[s.key] || 0) / 1000).toFixed(1) + " kWh</b></div>";
+        }).join("") + "<div class='r'><span class='swatch' style='background:var(--s-car)'></span>Car<b>" + ((row.car_wh || 0) / 1000).toFixed(1) + " kWh</b></div>"
+          : "<div class='muted'>No data</div>");
+      tip.style.display = "block";
+      var px = ml + gw * (n + 0.5), tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
+      tip.style.left = Math.max(0, tx) + "px"; tip.style.top = (mt + 4) + "px";
+    }
+    function hide() { tip.style.display = "none"; if (on) { on.classList.remove("on"); on = null; } }
+    svg.addEventListener("mousemove", show);
+    svg.addEventListener("touchstart", show, { passive: true });
+    svg.addEventListener("touchmove", show, { passive: true });
+    svg.addEventListener("mouseleave", hide);
+    svg.addEventListener("touchend", hide);
+    var tot = function (key) { return have.reduce(function (a, k) { return a + (daysData[k][key] || 0); }, 0) / 1000; };
+    var pv = tot("pv_wh"), ex = tot("export_wh"), im = tot("import_wh");
+    $("enote").textContent = "Over these days: " + pv.toFixed(0) + " kWh of solar, " + ex.toFixed(0) + " kWh exported, " +
+      im.toFixed(0) + " kWh from the grid" + (pv > 0 ? ". " + Math.round(100 * (pv - ex) / pv) + "% of the solar was used at home." : ".");
+  }
+  $("erange").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    eRange = b.getAttribute("data-d");
+    Array.prototype.forEach.call($("erange").querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
+    drawEnergy();
+  });
 
   function money(v) { return (v < 0 ? "&minus;$" : "$") + Math.abs(v).toFixed(2); }
   function shortDate(k) { return new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }); }
   function pollBill() {
     fetch("/api/bill", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (b) {
+      lastBill = b; drawEnergy();
       setText("b-total", money(b.total) + " <small style='font-size:14px;font-weight:500;color:var(--text-2)'>so far</small>");
       setText("b-period", shortDate(b.start) + " to " + shortDate(b.end) + ", day " + b.days_elapsed + " of " + b.days_total);
       setText("b-proj", b.projected == null ? "&nbsp;" : "about " + money(b.projected));
@@ -822,10 +954,24 @@ ul.events.tall { max-height: 640px; }
     rangeMin = parseInt(b.getAttribute("data-min"), 10);
     var all = $("range").querySelectorAll("button");
     for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === b);
+    loadLong();
     drawChart();
   });
 
-  // ---- chart
+  // ---- chart. Up to 3 days comes from the minute history polled every minute; longer
+  // ranges are fetched on demand from the archive, averaged into about 1200 points
+  var LONG_POINTS = 1200, longHist = {};
+  function isLong() { return rangeMin > 4320; }
+  function loadLong(force) {
+    if (!isLong()) return;
+    var m = rangeMin, c = longHist[m];
+    if (c && !force && Date.now() - c.t < 600000) return;
+    fetch("/api/history?minutes=" + m + "&points=" + LONG_POINTS, { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (h) { longHist[m] = { t: Date.now(), rows: h || [] }; if (rangeMin === m) drawChart(); }).catch(function () {});
+  }
+  function when(t, withDate) {
+    return withDate ? new Date(t * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + ", " + hm(t) : hm(t);
+  }
   var SERIES = [
     { key: 1, name: "Solar", color: "--s-solar", area: true },
     { key: 2, name: "House", color: "--s-house" },
@@ -847,10 +993,11 @@ ul.events.tall { max-height: 640px; }
     var oldEmpty = box.querySelector(".empty"); if (oldEmpty) oldEmpty.remove();
     var now = state ? state.time : Date.now() / 1000;
     var from = now - rangeMin * 60;
-    var pts = history.filter(function (p) { return p[0] >= from; });
+    var src = isLong() ? (longHist[rangeMin] ? longHist[rangeMin].rows : null) : history;
+    var pts = (src || []).filter(function (p) { return p[0] >= from; });
     if (pts.length < 2) {
       var e = document.createElement("div"); e.className = "empty";
-      e.textContent = "The chart fills in as minutes of data are collected";
+      e.textContent = src === null ? "Loading" : "The chart fills in as minutes of data are collected";
       box.appendChild(e); return;
     }
     var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 44, mt = 10, mb = 26;
@@ -871,19 +1018,25 @@ ul.events.tall { max-height: 640px; }
       html += "<line class='gridline' x1='" + ml + "' x2='" + (W - mr) + "' y1='" + yy + "' y2='" + yy + "'/>";
       html += "<text x='" + (ml - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + (v >= 1000 ? (v / 1000) + " kW" : v + " W") + "</text>";
     }
-    var span = now - from, stepH = span <= 3 * 3600 ? 0.5 : span <= 12 * 3600 ? 2 : span <= 86400 ? 3 : 12;
-    if (iw < 420) stepH *= span <= 3 * 3600 ? 2 : 2;
+    var span = now - from, stepH = span <= 3 * 3600 ? 0.5 : span <= 12 * 3600 ? 2 : span <= 86400 ? 3 :
+      span <= 3 * 86400 ? 12 : span <= 7 * 86400 ? 24 : span <= 14 * 86400 ? 48 : 120;
+    if (iw < 420) stepH *= 2;
     var step = stepH * 3600;
     var first = Math.ceil(from / step) * step;
     var tz = new Date().getTimezoneOffset() * 60;
     first = Math.ceil((from - tz) / step) * step + tz;
     for (var t = first; t <= now; t += step) {
       var d = new Date(t * 1000);
-      var lbl = span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short" }) : hm(t);
+      var lbl = span > 3 * 86400 ? d.toLocaleDateString([], { day: "numeric", month: "short" }) :
+        span > 86400 && d.getHours() === 0 ? d.toLocaleDateString([], { weekday: "short", day: "numeric" }) : hm(t);
       html += "<text x='" + x(t) + "' y='" + (H - 6) + "' text-anchor='middle'>" + lbl + "</text>";
     }
     html += "</g>";
-    var gapLimit = 180;
+    // a gap is anything over three times the usual spacing between points (at least 3 minutes)
+    var diffs = [];
+    for (var g = 1; g < pts.length; g++) diffs.push(pts[g][0] - pts[g - 1][0]);
+    diffs.sort(function (a, b) { return a - b; });
+    var gapLimit = Math.max(180, 3 * (diffs[Math.floor(diffs.length / 2)] || 60));
     SERIES.forEach(function (s) {
       var d = "", area = "", seg = [];
       var flush = function () {
@@ -928,7 +1081,7 @@ ul.events.tall { max-height: 640px; }
         var c = svg.querySelector("#dot" + k);
         c.setAttribute("cx", px); c.setAttribute("cy", y(p[s.key])); c.style.display = "";
       });
-      tip.innerHTML = "<div class='t'>" + hm(p[0]) + "</div>" + SERIES.map(function (s) {
+      tip.innerHTML = "<div class='t'>" + when(p[0], span > 86400) + (isLong() ? " <span class='muted'>(average)</span>" : "") + "</div>" + SERIES.map(function (s) {
         return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + kwPlain(p[s.key]) + "</b></div>";
       }).join("") + "<div class='r'><span class='swatch' style='background:var(--text-3)'></span>Grid<b>" + (p[4] < 0 ? "export " : "import ") + kwPlain(p[4]) + "</b></div>";
       tip.style.display = "block";
@@ -945,7 +1098,7 @@ ul.events.tall { max-height: 640px; }
     hit.addEventListener("mouseleave", leave);
     hit.addEventListener("touchend", leave);
   }
-  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(drawChart, 150); });
+  window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { drawChart(); drawEnergy(); }, 150); });
 
   // ---- weather card
   var WXI = {
