@@ -15,7 +15,7 @@
   color-scheme: light;
   --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
   --text: #0b0b0b; --text-2: #52514e; --text-3: #7c7a74; --grid: #e6e4de;
-  --s-solar: #eb6834; --s-grid: #2a78d6; --good: #0a8a0a; --crit: #d03b3b; --accent: #2a78d6; --accent-ink: #fff;
+  --s-solar: #eb6834; --s-grid: #2a78d6; --good: #0a8a0a; --crit: #d03b3b; --sc: #a11d1d; --accent: #2a78d6; --accent-ink: #fff;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark) {
@@ -23,14 +23,14 @@
     color-scheme: dark;
     --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
     --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
-    --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --accent: #3987e5; --shadow: none;
+    --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --sc: #c43434; --accent: #3987e5; --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
   --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
-  --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --accent: #3987e5; --shadow: none;
+  --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --sc: #c43434; --accent: #3987e5; --shadow: none;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -87,7 +87,7 @@ tr.month .msum { font-size: 13px; color: var(--text-3); margin-left: 10px; }
 tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
 .pill.away { color: var(--accent); }
-.pill.sc { color: var(--crit); }
+.pill.sc { color: var(--sc); }
 .todaybar { display: flex; align-items: baseline; gap: 10px 32px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 14px; }
 .todaybar h2 { margin: 0; min-width: 52px; }
 .todaybar .tb { display: inline-flex; align-items: baseline; gap: 6px; }
@@ -165,7 +165,7 @@ nav a[hidden] { display: none !important; }
       <div class="legendrow">
         <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
         <span><span class="swatch" style="background:var(--s-grid)"></span>Grid</span>
-        <span id="lg-sc" hidden><span class="swatch" style="background:var(--crit)"></span>Supercharger</span>
+        <span id="lg-sc" hidden><span class="swatch" style="background:var(--sc)"></span>Supercharger</span>
       </div>
     </div>
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
@@ -268,7 +268,7 @@ nav a[hidden] { display: none !important; }
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
-          "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'" + (s.supercharger ? " style='background:var(--crit)'" : "") + "><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
+          "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'" + (s.supercharger ? " style='background:var(--sc)'" : "") + "><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
           "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw ? s.peak_kw.toFixed(1) : "<span class='muted'>n/a</span>") +
           "</td><td class='hide-sm'>" + (s.batt_kwh ? kwh(s.batt_kwh) + (s.eff_pct ? " <span class='muted'>(" + s.eff_pct + "%)</span>" : "") : "<span class='muted'>n/a</span>") +
           "</td><td>" + money(s.cost) + (s.away && !s.actual ? " <span class='muted' title='Estimated from the away charging prices in TeslaTrack's config.ini'>est.</span>" : "") +
@@ -337,7 +337,7 @@ nav a[hidden] { display: none !important; }
     buckets.forEach(function (b, i) {
       var x = ml + slot * (i + 0.5) - bw / 2, base = y(0);
       // stacked from the bottom: solar, grid, Supercharger; only the top segment gets rounded corners
-      var segs = [[b.s, "var(--s-solar)"], [b.g, "var(--s-grid)"], [b.c, "var(--crit)"]].filter(function (q) { return q[0] > 0; });
+      var segs = [[b.s, "var(--s-solar)"], [b.g, "var(--s-grid)"], [b.c, "var(--sc)"]].filter(function (q) { return q[0] > 0; });
       var yb = base;
       segs.forEach(function (q, j) {
         var h = q[0] / ymax * ih;
@@ -359,7 +359,7 @@ nav a[hidden] { display: none !important; }
       tip.innerHTML = "<div class='t'>" + b.full + "</div>" +
         "<div class='r'><span class='swatch' style='background:var(--s-solar)'></span>Solar<b>" + kwh(b.s) + " kWh</b></div>" +
         "<div class='r'><span class='swatch' style='background:var(--s-grid)'></span>Grid<b>" + kwh(b.g) + " kWh</b></div>" +
-        (b.c > 0 ? "<div class='r'><span class='swatch' style='background:var(--crit)'></span>Supercharger<b>" + kwh(b.c) + " kWh</b></div>" : "") +
+        (b.c > 0 ? "<div class='r'><span class='swatch' style='background:var(--sc)'></span>Supercharger<b>" + kwh(b.c) + " kWh</b></div>" : "") +
         "<div class='r'><span class='swatch'></span>" + b.n + (b.n === 1 ? " session" : " sessions") + "<b>" + kwh(b.s + b.g + b.c) + " kWh</b></div>";
       tip.style.display = "block";
       var cx = +t.getAttribute("x") + slot / 2, tx = cx + 12;
