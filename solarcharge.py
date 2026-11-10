@@ -143,6 +143,8 @@ DEFAULTS = {
     "tariff": {
         "import_c_per_kwh": "30",
         "feed_in_c_per_kwh": "5",
+        "supply_c_per_day": "0",
+        "bill_day": "1",
     },
     "web": {
         "bind": "0.0.0.0",
@@ -246,6 +248,8 @@ class Settings(object):
 
         self.import_price = gf("tariff", "import_c_per_kwh") / 100.0
         self.feed_in_price = gf("tariff", "feed_in_c_per_kwh") / 100.0
+        self.supply_price = gf("tariff", "supply_c_per_day") / 100.0
+        self.bill_day = min(28, max(1, gi("tariff", "bill_day")))
 
         if self.default_mode not in MODES:
             self.default_mode = "solar"
@@ -1470,6 +1474,55 @@ class Controller(object):
             d[self.today_key] = dict(self.today)
         return d
 
+    def get_bill(self, now=None):
+        """Running cost of the current electricity bill, from the meter's daily import and export.
+        The period starts on bill_day each month and runs to the day before the next one."""
+        now = now or self.clock()
+        today = datetime.fromtimestamp(now).date()
+        bd = self.s.bill_day
+        start = today.replace(day=bd) if today.day >= bd else \
+            (today.replace(day=1) - timedelta(days=1)).replace(day=bd)
+        nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=bd)
+        total_days = (nxt - start).days
+        elapsed = (today - start).days + 1
+        days = self.get_days()
+        imp = exp = car = car_solar = 0.0
+        have = []
+        for k, d in days.items():
+            try:
+                day = date(*map(int, k.split("-")))
+            except ValueError:
+                continue
+            if start <= day <= today:
+                have.append(day)
+                imp += d.get("import_wh", 0.0)
+                exp += d.get("export_wh", 0.0)
+                car += d.get("car_wh", 0.0)
+                car_solar += d.get("car_solar_wh", 0.0)
+        s = self.s
+        imp_kwh, exp_kwh = imp / 1000.0, exp / 1000.0
+        usage = imp_kwh * s.import_price
+        credit = exp_kwh * s.feed_in_price
+        supply = elapsed * s.supply_price
+        total = usage + supply - credit
+        # projection from the days with data, today counted by how much of it has passed
+        frac = (now - time.mktime(today.timetuple())) / 86400.0
+        span = max(0.25, len(have) - 1 + frac) if have else 0
+        per_day = (usage - credit) / span if span else 0.0
+        projected = per_day * total_days + total_days * s.supply_price
+        car_grid_kwh = max(0.0, car - car_solar) / 1000.0
+        return {
+            "start": start.isoformat(), "end": (nxt - timedelta(days=1)).isoformat(),
+            "days_total": total_days, "days_elapsed": elapsed,
+            "first_data": min(have).isoformat() if have else None,
+            "import_kwh": round(imp_kwh, 2), "export_kwh": round(exp_kwh, 2),
+            "usage": round(usage, 2), "supply": round(supply, 2), "credit": round(credit, 2),
+            "total": round(total, 2), "projected": round(projected, 2) if have else None,
+            "import_price": s.import_price, "feed_in_price": s.feed_in_price, "supply_price": s.supply_price,
+            "car_kwh": round(car / 1000.0, 2), "car_grid_kwh": round(car_grid_kwh, 2),
+            "car_grid_cost": round(car_grid_kwh * s.import_price, 2),
+        }
+
     # ---- helpers
 
     def _blank_today(self):
@@ -2392,6 +2445,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(c.weather.snapshot(c.clock()) if c.weather else {"ok": False, "error": "off"})
         elif u.path == "/api/days":
             self._json(c.get_days())
+        elif u.path == "/api/bill":
+            self._json(c.get_bill())
         else:
             self.send_error(404)
 

@@ -370,18 +370,39 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 .subhead { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
 .subh { font-size: 12px; font-weight: 600; color: var(--text-3); margin: 0; letter-spacing: .06em; text-transform: uppercase; }
 nav a[hidden] { display: none !important; }
+.tab[hidden] { display: none; }
+.hero .sched { margin-bottom: 0; }
+.hero .days7 { gap: 5px; }
+.hero .day7 { padding: 8px 2px; }
+.hero .day7 .lb { display: none; }
+ul.events.tall { max-height: 640px; }
+.bill .billhead { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.billbig { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.billsub { font-size: 13px; color: var(--text-2); margin-top: 3px; }
+.billproj { text-align: right; }
+.billproj .lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.billmid { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.billbar { height: 6px; border-radius: 999px; background: var(--surface-2); margin: 12px 0 6px; overflow: hidden; }
+.billbar .fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; }
+.billtbl td { padding: 7px 4px; }
+.billtbl td.k { color: var(--text-2); }
+.billtbl td.k small { display: block; color: var(--text-3); font-size: 12px; }
+.billtbl tr.tot td { font-weight: 650; border-top: 2px solid var(--border); }
+.billtbl .cr { color: var(--good); }
+.billnote { font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5; }
 </style>
 </head>
 <body>
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav"><a href="/" class="on">Dashboard</a><a href="/sessions">Sessions</a></nav>
+    <nav class="nav" id="nav"><a href="#dashboard" data-tab="dashboard" class="on">Dashboard</a><a href="#status" data-tab="status">Status</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
+  <div class="tab" id="tab-dashboard">
   <div class="hero">
   <section class="scene" aria-label="Live energy flow">
 <svg viewBox="0 0 1144 1190" role="img" aria-labelledby="scenetitle" id="scenesvg">
@@ -423,21 +444,18 @@ nav a[hidden] { display: none !important; }
         <div class="legend"><span id="meterleft">Available for the car</span><span id="meterright"></span></div>
       </div>
     </div>
-    <div class="card">
-      <h2>Controller</h2>
-      <dl class="kv">
-        <dt>Controller says</dt><dd id="k-on"></dd>
-        <dt>Available (1 min average)</dt><dd id="k-avail"></dd>
-        <dt>Start threshold</dt><dd id="k-start"></dd>
-        <dt>Grid allowance while charging</dt><dd id="k-allow"></dd>
-        <dt>Voltage</dt><dd id="k-volts"></dd>
-        <dt>Car battery</dt><dd id="k-soc"></dd>
-        <dt>Inverter</dt><dd id="k-inv"></dd>
-        <dt>Wall Charger</dt><dd id="k-chg"></dd>
-        <dt>Car commands</dt><dd id="k-tes"></dd>
-        <dt>Commands today</dt><dd id="k-cmd"></dd>
-      </dl>
-    </div>
+    <section class="card sched" id="sched" hidden>
+      <div class="top">
+        <div class="headline">
+          <h2>Full charge</h2>
+          <div class="due" id="sc-due">&nbsp;</div>
+          <div class="meta" id="sc-meta">&nbsp;</div>
+          <div class="why">LFP batteries should reach 100% about once a week so the car can keep its range estimate accurate.
+            Solar forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</div>
+        </div>
+      </div>
+      <div class="days7" id="sc-days"></div>
+    </section>
   </section>
   </div>
 
@@ -460,20 +478,33 @@ nav a[hidden] { display: none !important; }
     <div class="wxhours" id="wx-hours"></div>
     <div class="wxnote" id="wx-note"></div>
   </section>
+  </div>
 
-  <section class="card sched" id="sched" hidden>
-    <div class="top">
-      <div class="headline">
-        <h2>Full charge</h2>
-        <div class="due" id="sc-due">&nbsp;</div>
-        <div class="meta" id="sc-meta">&nbsp;</div>
-        <div class="why">LFP batteries should reach 100% about once a week so the car can keep its range estimate accurate.
-          Solar forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</div>
-      </div>
+  <div class="tab" id="tab-status" hidden>
+  <section class="grid bottom">
+    <div class="card">
+      <h2>Controller</h2>
+      <dl class="kv">
+        <dt>Controller says</dt><dd id="k-on"></dd>
+        <dt>Available (1 min average)</dt><dd id="k-avail"></dd>
+        <dt>Start threshold</dt><dd id="k-start"></dd>
+        <dt>Grid allowance while charging</dt><dd id="k-allow"></dd>
+        <dt>Voltage</dt><dd id="k-volts"></dd>
+        <dt>Car battery</dt><dd id="k-soc"></dd>
+        <dt>Inverter</dt><dd id="k-inv"></dd>
+        <dt>Wall Charger</dt><dd id="k-chg"></dd>
+        <dt>Car commands</dt><dd id="k-tes"></dd>
+        <dt>Commands today</dt><dd id="k-cmd"></dd>
+      </dl>
     </div>
-    <div class="days7" id="sc-days"></div>
+    <div class="card">
+      <h2>Recent events</h2>
+      <ul class="events tall" id="events"></ul>
+    </div>
   </section>
+  </div>
 
+  <div class="tab" id="tab-meter" hidden>
   <section class="grid today">
     <div class="card stat"><div class="label">Solar today</div><div class="value" id="t-pv"></div></div>
     <div class="card stat"><div class="label">Car charged</div><div class="value" id="t-car"></div></div>
@@ -502,9 +533,15 @@ nav a[hidden] { display: none !important; }
   </section>
 
   <section class="grid bottom">
-    <div class="card">
-      <h2>Recent events</h2>
-      <ul class="events" id="events"></ul>
+    <div class="card bill">
+      <h2>This bill</h2>
+      <div class="billhead">
+        <div><div class="billbig" id="b-total">&nbsp;</div><div class="billsub" id="b-period">&nbsp;</div></div>
+        <div class="billproj"><div class="lbl">Projected bill</div><div class="billmid" id="b-proj">&nbsp;</div></div>
+      </div>
+      <div class="billbar" title="How far through the billing period"><div class="fill" id="b-bar"></div></div>
+      <table class="billtbl"><tbody id="b-rows"></tbody></table>
+      <div class="billnote" id="b-note"></div>
     </div>
     <div class="card">
       <h2>Daily totals</h2>
@@ -515,6 +552,7 @@ nav a[hidden] { display: none !important; }
       <div class="exports" id="exports"></div>
     </div>
   </section>
+  </div>
   <footer id="footer"></footer>
 </div>
 
@@ -714,6 +752,46 @@ nav a[hidden] { display: none !important; }
         var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
         return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
       }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
+    }).catch(function () {});
+  }
+
+  // ---- tabs (Dashboard, Status, Meter) kept in the address so a refresh stays put
+  var TABS = ["dashboard", "status", "meter"];
+  function showTab() {
+    var t = location.hash.slice(1);
+    if (TABS.indexOf(t) < 0) t = "dashboard";
+    TABS.forEach(function (n) { $("tab-" + n).hidden = n !== t; });
+    Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab]"), function (a) {
+      a.classList.toggle("on", a.getAttribute("data-tab") === t);
+    });
+    if (t === "meter") { drawChart(); pollBill(); pollDays(); }
+  }
+  window.addEventListener("hashchange", function () { showTab(); window.scrollTo(0, 0); });
+
+  function money(v) { return (v < 0 ? "&minus;$" : "$") + Math.abs(v).toFixed(2); }
+  function shortDate(k) { return new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }); }
+  function pollBill() {
+    fetch("/api/bill", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (b) {
+      setText("b-total", money(b.total) + " <small style='font-size:14px;font-weight:500;color:var(--text-2)'>so far</small>");
+      setText("b-period", shortDate(b.start) + " to " + shortDate(b.end) + ", day " + b.days_elapsed + " of " + b.days_total);
+      setText("b-proj", b.projected == null ? "&nbsp;" : "about " + money(b.projected));
+      $("b-bar").style.width = Math.min(100, 100 * b.days_elapsed / b.days_total) + "%";
+      var c = function (p) { return p >= 1 ? "$" + p.toFixed(2) : (p * 100).toFixed(p * 100 % 1 ? 2 : 0) + "c"; };
+      var rows = [
+        ["Grid usage<small>" + b.import_kwh.toFixed(1) + " kWh at " + c(b.import_price) + "</small>", money(b.usage)],
+        ["Supply charge<small>" + b.days_elapsed + " days at " + c(b.supply_price) + " a day</small>",
+          b.supply_price ? money(b.supply) : "<span class='muted'>not set</span>"],
+        ["Solar feed in<small>" + b.export_kwh.toFixed(1) + " kWh at " + c(b.feed_in_price) + "</small>", "<span class='cr'>" + money(-b.credit) + "</span>"]
+      ];
+      var html = rows.map(function (r) { return "<tr><td class='k'>" + r[0] + "</td><td>" + r[1] + "</td></tr>"; }).join("") +
+        "<tr class='tot'><td>Total so far</td><td>" + money(b.total) + "</td></tr>";
+      setText("b-rows", html);
+      var notes = [];
+      if (b.car_grid_kwh > 0.05) notes.push("Car charging from the grid this period: " + b.car_grid_kwh.toFixed(1) + " kWh, " + money(b.car_grid_cost) + ".");
+      if (b.first_data && b.first_data > b.start) notes.push("SolarCharge's records start " + shortDate(b.first_data) + ", so earlier days aren't counted.");
+      if (!b.supply_price) notes.push("Add your daily supply charge as supply_c_per_day under [tariff] in config.ini.");
+      notes.push("An estimate from the inverter's meter readings, before any discounts or fees on the actual bill.");
+      setText("b-note", notes.join(" "));
     }).catch(function () {});
   }
 
@@ -975,7 +1053,9 @@ nav a[hidden] { display: none !important; }
     fetch("/api/schedule", { cache: "no-store" }).then(function (r) { return r.json(); }).then(renderSchedule).catch(function () {});
   }
 
-  poll(); pollHistory(); pollDays(); pollSchedule(); pollExports(); pollWeather();
+  showTab();
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollExports(); pollWeather(); pollBill();
+  setInterval(pollBill, 300000);
   setInterval(pollWeather, 600000);
   setInterval(pollExports, 3600000);
   setInterval(pollSchedule, 120000);
