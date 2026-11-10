@@ -268,7 +268,7 @@ nav a[hidden] { display: none !important; }
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
-          "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
+          "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'" + (s.supercharger ? " style='background:var(--crit)'" : "") + "><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
           "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw ? s.peak_kw.toFixed(1) : "<span class='muted'>n/a</span>") +
           "</td><td class='hide-sm'>" + (s.batt_kwh ? kwh(s.batt_kwh) + (s.eff_pct ? " <span class='muted'>(" + s.eff_pct + "%)</span>" : "") : "<span class='muted'>n/a</span>") +
           "</td><td>" + money(s.cost) + (s.away && !s.actual ? " <span class='muted' title='Estimated from the away charging prices in TeslaTrack's config.ini'>est.</span>" : "") +
