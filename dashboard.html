@@ -406,13 +406,13 @@ ul.events.tall { max-height: 640px; }
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
-    <nav class="nav" id="nav"><a href="#dashboard" data-tab="dashboard" class="on">Dashboard</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a><a href="#status" data-tab="status">Status</a></nav>
+    <nav class="nav" id="nav"><a href="#status" data-tab="status" class="on">Status</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a><a href="#system" data-tab="system">System</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
-  <div class="tab" id="tab-dashboard">
+  <div class="tab" id="tab-status">
   <div class="hero">
   <section class="scene" aria-label="Live energy flow">
 <svg viewBox="0 0 1144 1190" role="img" aria-labelledby="scenetitle" id="scenesvg">
@@ -440,7 +440,7 @@ ul.events.tall { max-height: 640px; }
   </section>
   <section class="grid main">
     <div class="card">
-      <h2>Status</h2>
+      <h2>Control</h2>
       <div class="reason" id="reason">Loading</div>
       <div class="modes" id="modes">
         <button type="button" data-mode="manual">Manual</button>
@@ -490,7 +490,7 @@ ul.events.tall { max-height: 640px; }
   </section>
   </div>
 
-  <div class="tab" id="tab-status" hidden>
+  <div class="tab" id="tab-system" hidden>
   <section class="grid bottom">
     <div class="card">
       <h2>Controller</h2>
@@ -752,11 +752,11 @@ ul.events.tall { max-height: 640px; }
       daysData = d; drawEnergy();
     }).catch(function () {});
   }
-  // ---- tabs (Dashboard, Meter, Status) kept in the address so a refresh stays put
-  var TABS = ["dashboard", "status", "meter"];
+  // ---- tabs (Status, Meter, System) kept in the address so a refresh stays put
+  var TABS = ["status", "system", "meter"];
   function showTab() {
     var t = location.hash.slice(1);
-    if (TABS.indexOf(t) < 0) t = "dashboard";
+    if (TABS.indexOf(t) < 0) t = "status";
     TABS.forEach(function (n) { $("tab-" + n).hidden = n !== t; });
     Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab]"), function (a) {
       a.classList.toggle("on", a.getAttribute("data-tab") === t);
