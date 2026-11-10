@@ -1430,6 +1430,7 @@ class Controller(object):
         self.not_charging_since = None
         self.self_started = False
         self.small_draw = False          # car drawing a little for itself (climate, Sentry), not charging
+        self.start_retried = False       # one extra start already tried after the car didn't begin charging
         self.own_use_until = 0.0         # a draw that carried on through a stop command: the car running itself
         self.stop_at = 0.0               # when the last stop was sent
         self.zero_since_stop = True      # the draw fell to nothing at some point after that stop
@@ -1870,12 +1871,19 @@ class Controller(object):
                     self.on = False
                     self.off_since = now
                     self.not_charging_since = None
-                    if self.mode != "manual":
+                    if self.mode != "manual" and not self.start_retried:
+                        # a car just woken from sleep can accept a start and still not begin charging:
+                        # try once more (the usual start checks apply) before pausing
+                        self.start_retried = True
+                        self.event("Car didn't start drawing power, trying once more")
+                    elif self.mode != "manual":
                         self.refused_until = now + s.no_charge_backoff
                         self.event("Car is not drawing power (full, at its limit, or stopped in the app). "
                                    "Pausing until %s" % time.strftime("%H:%M", time.localtime(self.refused_until)))
             else:
                 self.not_charging_since = None
+            if actual or not chg["plugged"]:
+                self.start_retried = False
 
         if self.mode == "manual":
             self.reason = "Manual mode, not controlling the car"
