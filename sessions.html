@@ -91,6 +91,8 @@ tr.live td { color: var(--text); }
 .pill.away { color: var(--accent); }
 .pill.sc { color: var(--sc); }
 .pill.est { color: var(--text-3); }
+.pill.work { color: var(--accent); margin-left: 0; }
+table.drive td.route, table.drive th:nth-child(3) { text-align: left; white-space: normal; }
 @media (max-width: 480px) {
   .toolbar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
@@ -168,7 +170,7 @@ nav a[hidden] { display: none !important; }
   </section>
 
   <section class="card">
-    <div class="charthead"><h2>Sessions</h2></div>
+    <div class="charthead"><h2>Charging sessions</h2></div>
     <div class="tablewrap">
       <table>
         <thead><tr>
@@ -181,7 +183,20 @@ nav a[hidden] { display: none !important; }
     </div>
     <div class="exports" id="exports"></div>
   </section>
-  <footer id="footer">A session runs from plugging in to unplugging. Costs use the tariff in config.ini at the time of each session.</footer>
+
+  <section class="card" style="margin-top:14px">
+    <div class="charthead"><h2>Driving sessions</h2><span class="muted" id="drivesum" style="font-size:13px"></span></div>
+    <div class="tablewrap">
+      <table class="drive">
+        <thead><tr>
+          <th>Date</th><th class="hide-sm">Time</th><th class="hide-sm">Route</th><th>km</th><th class="hide-sm">Minutes</th>
+          <th>kWh/100 km</th><th>Type</th>
+        </tr></thead>
+        <tbody id="drows"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer id="footer">A charging session runs from plugging in to unplugging, and costs use the tariff in config.ini at the time. Driving sessions are the trips TeslaTrack records.</footer>
 </div>
 
 <script>
@@ -247,6 +262,7 @@ nav a[hidden] { display: none !important; }
     $("t-saved").textContent = money(saved);
     renderFuel(cost, total);
     renderTable(list, live);
+    renderDrives();
     renderChart(all);
   }
 
@@ -286,7 +302,7 @@ nav a[hidden] { display: none !important; }
     // driving efficiency from the car's own battery use on each trip (TeslaTrack), like the car shows;
     // the charged energy per km is higher, as it also covers charging losses and the car's use while parked
     var ra = r[0].getTime() / 1000, rb = r[1].getTime() / 1000, tk = 0, te = 0;
-    (dist.trips || []).forEach(function (t) { if (t[0] >= ra && t[0] < rb) { tk += t[1]; te += t[2]; } });
+    tripsIn(ra, rb).forEach(function (t) { if (t.kwh) { tk += t.km; te += t.kwh; } });
     // overall (everything charged per km) only means something over a month or more: over a day or a
     // week, the battery level at the start and end swings it, so it's left out for those
     var na2 = "<span class='muted'>n/a</span>", long = period !== "today" && period !== "week";
@@ -303,6 +319,35 @@ nav a[hidden] { display: none !important; }
     $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
     $("t-fuelsub").textContent = money(fuel) + " of " + (f.name || "fuel") + " (" + Math.round(km * f.l_per_100km / 100) + " L at " +
       f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L)";
+  }
+
+  function trips() {
+    var dist = data && data.distance;
+    return ((dist && dist.trips) || []).map(function (t) {
+      return Array.isArray(t) ? { start: t[0], km: t[1], kwh: t[2] } : t;
+    });
+  }
+  function tripsIn(a, b) { return trips().filter(function (t) { return t.start >= a && t.start < b; }); }
+
+  function renderDrives() {
+    var r = range(period), list = tripsIn(r[0].getTime() / 1000, r[1].getTime() / 1000).sort(function (x, y) { return y.start - x.start; });
+    if (!data.distance) {
+      $("drows").innerHTML = "<tr><td colspan='7' class='muted' style='text-align:center;padding:24px'>Trips come from TeslaTrack, which isn't connected.</td></tr>";
+      $("drivesum").textContent = ""; return;
+    }
+    var km = list.reduce(function (a, t) { return a + (t.km || 0); }, 0);
+    var wk = list.filter(function (t) { return t.work; }).reduce(function (a, t) { return a + (t.km || 0); }, 0);
+    $("drivesum").textContent = list.length ? list.length + (list.length === 1 ? " trip, " : " trips, ") + km.toFixed(0) + " km" +
+      (wk ? " (" + wk.toFixed(0) + " km work)" : "") : "";
+    $("drows").innerHTML = list.map(function (t) {
+      var date = d(t.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+      var route = (t.from || t.to) ? esc(t.from || "?") + " to " + esc(t.to || "?") : "<span class='muted'>n/a</span>";
+      var eff = t.kwh && t.km >= 1 ? (100 * t.kwh / t.km).toFixed(1) : "<span class='muted'>n/a</span>";
+      return "<tr><td>" + date + "</td><td class='hide-sm'>" + hm(t.start) + (t.end ? " to " + hm(t.end) : "") +
+        "</td><td class='hide-sm route'>" + route + "</td><td>" + (t.km || 0).toFixed(1) +
+        "</td><td class='hide-sm'>" + (t.minutes != null ? t.minutes : "<span class='muted'>n/a</span>") + "</td><td>" + eff +
+        "</td><td>" + (t.work ? "<span class='pill work'>Work</span>" : "<span class='muted'>Personal</span>") + "</td></tr>";
+    }).join("") || "<tr><td colspan='7' class='muted' style='text-align:center;padding:24px'>No trips recorded in this period.</td></tr>";
   }
 
   function renderTable(list, live) {
