@@ -211,9 +211,9 @@ nav a[hidden] { display: none !important; }
   function range(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
     if (p === "today") return [new Date(y, m, now.getDate()), new Date(y, m, now.getDate() + 1)];
-    if (p === "week") {   // Monday to Sunday
-      var mon = now.getDate() - ((now.getDay() + 6) % 7);
-      return [new Date(y, m, mon), new Date(y, m, mon + 7)];
+    if (p === "week") {   // Sunday to Saturday
+      var sun = now.getDate() - now.getDay();
+      return [new Date(y, m, sun), new Date(y, m, sun + 7)];
     }
     if (p === "month") return [new Date(y, m, 1), new Date(y, m + 1, 1)];
     if (p === "last") return [new Date(y, m - 1, 1), new Date(y, m, 1)];
