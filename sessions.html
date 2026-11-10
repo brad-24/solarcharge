@@ -165,6 +165,7 @@ nav a[hidden] { display: none !important; }
       <div class="legendrow">
         <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
         <span><span class="swatch" style="background:var(--s-grid)"></span>Grid</span>
+        <span id="lg-sc" hidden><span class="swatch" style="background:var(--crit)"></span>Supercharger</span>
       </div>
     </div>
     <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
@@ -292,20 +293,24 @@ nav a[hidden] { display: none !important; }
       }
       for (var m = new Date(r[0]); m < r[1]; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
         var k = m.getFullYear() + "-" + ("0" + (m.getMonth() + 1)).slice(-2);
-        idx[k] = buckets.length; buckets.push({ k: k, label: m.toLocaleDateString([], { month: "short" }), full: m.toLocaleDateString([], { month: "long", year: "numeric" }), s: 0, g: 0, n: 0 });
+        idx[k] = buckets.length; buckets.push({ k: k, label: m.toLocaleDateString([], { month: "short" }), full: m.toLocaleDateString([], { month: "long", year: "numeric" }), s: 0, g: 0, c: 0, n: 0 });
       }
     } else {
       for (var dd = new Date(r[0]); dd < r[1]; dd = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() + 1)) {
         var k2 = dd.getFullYear() + "-" + ("0" + (dd.getMonth() + 1)).slice(-2) + "-" + ("0" + dd.getDate()).slice(-2);
-        idx[k2] = buckets.length; buckets.push({ k: k2, label: String(dd.getDate()), full: dd.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }), s: 0, g: 0, n: 0 });
+        idx[k2] = buckets.length; buckets.push({ k: k2, label: String(dd.getDate()), full: dd.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }), s: 0, g: 0, c: 0, n: 0 });
       }
     }
     list.forEach(function (s) {
       var k = byMonth ? monthKey(s.start) : dayKey(s.start), i = idx[k];
       if (i === undefined) return;
-      buckets[i].s += s.solar_kwh || 0; buckets[i].g += s.grid_kwh || 0; buckets[i].n += 1;
+      if (s.supercharger) buckets[i].c += s.kwh || 0;
+      else { buckets[i].s += s.solar_kwh || 0; buckets[i].g += s.grid_kwh || 0; }
+      buckets[i].n += 1;
     });
-    var max = 0; buckets.forEach(function (b) { max = Math.max(max, b.s + b.g); });
+    var anySc = buckets.some(function (b) { return b.c > 0; });
+    $("lg-sc").hidden = !anySc;
+    var max = 0; buckets.forEach(function (b) { max = Math.max(max, b.s + b.g + b.c); });
     if (max <= 0) {
       var e = document.createElement("div"); e.className = "empty";
       e.textContent = "No charging recorded in this period yet";
@@ -331,14 +336,15 @@ nav a[hidden] { display: none !important; }
     var rr = Math.min(4, bw / 2);
     buckets.forEach(function (b, i) {
       var x = ml + slot * (i + 0.5) - bw / 2, base = y(0);
-      if (b.s + b.g > 0) {
-        var hs = b.s / ymax * ih, hg = b.g / ymax * ih, gap = (hs > 0 && hg > 0) ? 2 : 0;
-        if (hs > 0) {
-          var top = hg > 0;
-          html += barPath(x, base - hs, bw, hs, top ? 0 : rr, "var(--s-solar)");
-        }
-        if (hg > 0) html += barPath(x, base - hs - gap - hg, bw, hg, rr, "var(--s-grid)");
-      }
+      // stacked from the bottom: solar, grid, Supercharger; only the top segment gets rounded corners
+      var segs = [[b.s, "var(--s-solar)"], [b.g, "var(--s-grid)"], [b.c, "var(--crit)"]].filter(function (q) { return q[0] > 0; });
+      var yb = base;
+      segs.forEach(function (q, j) {
+        var h = q[0] / ymax * ih;
+        if (j > 0) yb -= 2;
+        html += barPath(x, yb - h, bw, h, j === segs.length - 1 ? rr : 0, q[1]);
+        yb -= h;
+      });
       html += "<rect class='hit' data-i='" + i + "' x='" + (ml + slot * i) + "' y='" + mt + "' width='" + slot + "' height='" + ih + "'/>";
     });
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -353,7 +359,8 @@ nav a[hidden] { display: none !important; }
       tip.innerHTML = "<div class='t'>" + b.full + "</div>" +
         "<div class='r'><span class='swatch' style='background:var(--s-solar)'></span>Solar<b>" + kwh(b.s) + " kWh</b></div>" +
         "<div class='r'><span class='swatch' style='background:var(--s-grid)'></span>Grid<b>" + kwh(b.g) + " kWh</b></div>" +
-        "<div class='r'><span class='swatch'></span>" + b.n + (b.n === 1 ? " session" : " sessions") + "<b>" + kwh(b.s + b.g) + " kWh</b></div>";
+        (b.c > 0 ? "<div class='r'><span class='swatch' style='background:var(--crit)'></span>Supercharger<b>" + kwh(b.c) + " kWh</b></div>" : "") +
+        "<div class='r'><span class='swatch'></span>" + b.n + (b.n === 1 ? " session" : " sessions") + "<b>" + kwh(b.s + b.g + b.c) + " kWh</b></div>";
       tip.style.display = "block";
       var cx = +t.getAttribute("x") + slot / 2, tx = cx + 12;
       if (tx + tip.offsetWidth > W) tx = cx - tip.offsetWidth - 12;
