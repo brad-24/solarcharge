@@ -191,7 +191,7 @@ nav a[hidden] { display: none !important; }
       <table class="drive">
         <thead><tr>
           <th>Date</th><th class="hide-sm">Time</th><th class="hide-sm">Route</th><th>km</th><th class="hide-sm">Minutes</th>
-          <th>kWh/100 km</th><th>Type</th>
+          <th>kWh/100 km</th><th>Cost</th><th>Type</th>
         </tr></thead>
         <tbody id="drows"></tbody>
       </table>
@@ -284,6 +284,7 @@ nav a[hidden] { display: none !important; }
     return [dv.odo + (dist.days[first] - dv.odo) * frac, true];
   }
   function renderFuel(cost, total) {
+    tripRate = null;
     var dist = data.distance, f = data.fuel || {};
     $("t-fuellbl").textContent = "Compared with " + (f.name || "fuel");
     var na = function (why) {
@@ -323,11 +324,13 @@ nav a[hidden] { display: none !important; }
     var allS = (data.sessions || []).concat(data.current ? [data.current] : []);
     var allK = sum(allS, "kwh"), allC = sum(allS, "cost");
     var rate = total >= 5 ? cost / total : allK > 0 ? allC / allK : null, rateAll = total < 5;
+    tripRate = rate;
     if (effv && rate != null) {
-      var cpk = rate * effv;          // cents per km: ($/kWh x kWh/100 km) is $ per 100 km, which is c per km
-      $("t-ecost").innerHTML = cpk.toFixed(1) + "<small>c per km</small>";
-      $("t-ecostsub").textContent = money(cpk) + " per 100 km: " + Math.round(rate * 100) + "c/kWh" + (rateAll ? " (all time average)" : "") +
-        " \u00d7 " + effv.toFixed(1) + " kWh/100 km";
+      // total cost of the distance driven: km x kWh per km x average price per kWh
+      var dcost = km * effv / 100 * rate;
+      $("t-ecost").innerHTML = money(dcost);
+      $("t-ecostsub").textContent = Math.round(km) + " km \u00d7 " + effv.toFixed(1) + " kWh/100 km \u00d7 " + Math.round(rate * 100) + "c/kWh" +
+        (rateAll ? " (all time average)" : "") + ", " + (100 * dcost / km).toFixed(1) + "c per km";
     } else { $("t-ecost").innerHTML = na2; $("t-ecostsub").textContent = "needs trips and charging"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
@@ -336,6 +339,7 @@ nav a[hidden] { display: none !important; }
       f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L)";
   }
 
+  var tripRate = null;   // average price per kWh for the period, set by renderFuel, used for each trip's cost
   function trips() {
     var dist = data && data.distance;
     return ((dist && dist.trips) || []).map(function (t) {
@@ -347,7 +351,7 @@ nav a[hidden] { display: none !important; }
   function renderDrives() {
     var r = range(period), list = tripsIn(r[0].getTime() / 1000, r[1].getTime() / 1000).sort(function (x, y) { return y.start - x.start; });
     if (!data.distance) {
-      $("drows").innerHTML = "<tr><td colspan='7' class='muted' style='text-align:center;padding:24px'>Trips come from TeslaTrack, which isn't connected.</td></tr>";
+      $("drows").innerHTML = "<tr><td colspan='8' class='muted' style='text-align:center;padding:24px'>Trips come from TeslaTrack, which isn't connected.</td></tr>";
       $("drivesum").textContent = ""; return;
     }
     var km = list.reduce(function (a, t) { return a + (t.km || 0); }, 0);
@@ -361,8 +365,8 @@ nav a[hidden] { display: none !important; }
       return "<tr><td>" + date + "</td><td class='hide-sm'>" + hm(t.start) + (t.end ? " to " + hm(t.end) : "") +
         "</td><td class='hide-sm route'>" + route + "</td><td>" + (t.km || 0).toFixed(1) +
         "</td><td class='hide-sm'>" + (t.minutes != null ? t.minutes : "<span class='muted'>n/a</span>") + "</td><td>" + eff +
-        "</td><td>" + (t.work ? "<span class='pill work'>Work</span>" : "<span class='muted'>Personal</span>") + "</td></tr>";
-    }).join("") || "<tr><td colspan='7' class='muted' style='text-align:center;padding:24px'>No trips recorded in this period.</td></tr>";
+        "</td><td>" + (t.kwh && tripRate != null ? money(t.kwh * tripRate) : "<span class='muted'>n/a</span>") + "</td><td>" + (t.work ? "<span class='pill work'>Work</span>" : "<span class='muted'>Personal</span>") + "</td></tr>";
+    }).join("") || "<tr><td colspan='8' class='muted' style='text-align:center;padding:24px'>No trips recorded in this period.</td></tr>";
   }
 
   function renderTable(list, live) {
