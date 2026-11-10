@@ -52,8 +52,10 @@ nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--sha
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
 .btn { margin-left: auto; font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .btn:hover { border-color: var(--text-3); }
-.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }
-@media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+.tiles.drive { grid-template-columns: repeat(3, 1fr); }
+.group { font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); margin: 4px 2px 8px; }
+@media (max-width: 900px) { .tiles, .tiles.drive { grid-template-columns: repeat(2, 1fr); } .tiles.drive .tile:last-child { grid-column: span 2; } }
 @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 .tile .label { font-size: 12px; color: var(--text-2); }
 .tile .value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -88,13 +90,6 @@ tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
 .pill.away { color: var(--accent); }
 .pill.sc { color: var(--sc); }
-.todaybar { display: flex; align-items: baseline; gap: 10px 32px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 14px; }
-.todaybar h2 { margin: 0; min-width: 52px; }
-.todaybar .tb { display: inline-flex; align-items: baseline; gap: 6px; }
-.todaybar .tv { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.todaybar .tv small { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 2px; }
-.todaybar .tl { font-size: 13px; color: var(--text-2); }
-@media (max-width: 480px) { .todaybar { gap: 8px 18px; } .todaybar h2 { width: 100%; } }
 @media (max-width: 480px) {
   .toolbar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
@@ -133,13 +128,6 @@ nav a[hidden] { display: none !important; }
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
-  <section class="card todaybar" aria-label="Today">
-    <h2>Today</h2>
-    <div class="tb"><span class="tv" id="d-car">&nbsp;</span><span class="tl">charged</span></div>
-    <div class="tb"><span class="tv" id="d-share">&nbsp;</span><span class="tl">from solar</span></div>
-    <div class="tb"><span class="tv" id="d-ss">&nbsp;</span><span class="tl">starts / stops</span></div>
-  </section>
-
   <div class="toolbar">
     <div class="seg" id="period">
       <button type="button" data-p="today">Today</button>
@@ -152,16 +140,17 @@ nav a[hidden] { display: none !important; }
     <button class="btn" id="csv" type="button">Download CSV</button>
   </div>
 
-  <section class="tiles">
-    <div class="card tile"><div class="label">Sessions</div><div class="value" id="t-n">&nbsp;</div><div class="sub" id="t-nsub">&nbsp;</div></div>
+  <div class="group">Charging</div>
+  <section class="tiles charge">
     <div class="card tile"><div class="label">Charged</div><div class="value" id="t-kwh">&nbsp;</div><div class="sub" id="t-kwhsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label">From solar</div><div class="value" id="t-share">&nbsp;</div><div class="sub" id="t-solar">&nbsp;</div></div>
-    <div class="card tile"><div class="label">From grid</div><div class="value" id="t-grid">&nbsp;</div><div class="sub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Solar</div><div class="value" id="t-share">&nbsp;</div><div class="sub" id="t-solar">&nbsp;</div></div>
     <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">&nbsp;</div><div class="sub" id="t-costsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Saved by solar</div><div class="value" id="t-saved">&nbsp;</div><div class="sub">vs charging from the grid</div></div>
+  </section>
+  <div class="group">Driving</div>
+  <section class="tiles drive">
     <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label">Trip efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label">Overall efficiency</div><div class="value" id="t-oeff">&nbsp;</div><div class="sub" id="t-oeffsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
     <div class="card tile"><div class="label" id="t-fuellbl">Compared with fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
   </section>
 
@@ -248,13 +237,10 @@ nav a[hidden] { display: none !important; }
     var list = all.filter(function (s) { return !s.live; });
     var n = all.length, total = sum(all, "kwh"), solar = sum(all, "solar_kwh"), grid = sum(all, "grid_kwh");
     var cost = sum(all, "cost"), saved = sum(all, "saved"), chg = sum(all, "charge_min");
-    $("t-n").textContent = n;
-    $("t-nsub").textContent = n ? dur(chg) + " charging" : " ";
     $("t-kwh").innerHTML = kwh(total) + "<small>kWh</small>";
-    $("t-kwhsub").textContent = n ? kwh(total / n) + " kWh per session" : " ";
+    $("t-kwhsub").textContent = n + (n === 1 ? " session, " : " sessions, ") + dur(chg) + " charging";
     $("t-share").innerHTML = total > 0 ? Math.round(100 * solar / total) + "<small>%</small>" : "<span class='muted'>n/a</span>";
-    $("t-solar").textContent = kwh(solar) + " kWh of solar";
-    $("t-grid").innerHTML = kwh(grid) + "<small>kWh</small>";
+    $("t-solar").textContent = kwh(solar) + " kWh solar, " + kwh(grid) + " kWh grid";
     $("t-cost").textContent = money(cost);
     $("t-costsub").textContent = total > 0 ? Math.round(100 * cost / total) + "c per kWh average" : " ";
     $("t-saved").textContent = money(saved);
@@ -286,7 +272,6 @@ nav a[hidden] { display: none !important; }
       $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
       $("t-eff").innerHTML = "<span class='muted'>n/a</span>"; $("t-effsub").innerHTML = "&nbsp;";
-      $("t-oeff").innerHTML = "<span class='muted'>n/a</span>"; $("t-oeffsub").innerHTML = "&nbsp;";
     };
     if (!dist || dist.now == null || !dist.days) return na("needs TeslaTrack");
     var r = range(period), now = new Date();
@@ -301,15 +286,17 @@ nav a[hidden] { display: none !important; }
     // the charged energy per km is higher, as it also covers charging losses and the car's use while parked
     var ra = r[0].getTime() / 1000, rb = r[1].getTime() / 1000, tk = 0, te = 0;
     (dist.trips || []).forEach(function (t) { if (t[0] >= ra && t[0] < rb) { tk += t[1]; te += t[2]; } });
-    var na2 = "<span class='muted'>n/a</span>";
+    // overall (everything charged per km) only means something over a month or more: over a day or a
+    // week, the battery level at the start and end swings it, so it's left out for those
+    var na2 = "<span class='muted'>n/a</span>", long = period !== "today" && period !== "week";
+    var overall = long && km >= 50 && total > 0 ? "overall " + (100 * total / km).toFixed(1) + ", incl. charging losses and use while parked" : "";
     if (tk >= 5) {
       $("t-eff").innerHTML = (100 * te / tk).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = "driving only, from the battery on " + Math.round(tk) + " km of trips";
+      $("t-effsub").textContent = overall ? "driving. " + overall.charAt(0).toUpperCase() + overall.slice(1) : "driving, from the battery on " + Math.round(tk) + " km of trips";
+    } else if (overall) {
+      $("t-eff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
+      $("t-effsub").textContent = "overall, incl. charging losses and use while parked (no trips recorded)";
     } else { $("t-eff").innerHTML = na2; $("t-effsub").textContent = "no trips recorded in this period"; }
-    if (km >= 20 && total > 0) {
-      $("t-oeff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-oeffsub").textContent = "everything charged, incl. losses and use while parked";
-    } else { $("t-oeff").innerHTML = na2; $("t-oeffsub").textContent = "needs more driving"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
     $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
@@ -475,14 +462,6 @@ nav a[hidden] { display: none !important; }
       .then(function (j) { data = j; render(); }).catch(function () {});
   }
   window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { if (data) renderChart(inPeriod()); }, 150); });
-  function loadToday() {
-    fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (st) {
-      var t = st.today;
-      $("d-car").innerHTML = t.car_kwh.toFixed(1) + "<small>kWh</small>";
-      $("d-share").innerHTML = t.solar_share === null ? "<span class='muted'>n/a</span>" : t.solar_share + "<small>%</small>";
-      $("d-ss").textContent = t.starts + " / " + t.stops;
-    }).catch(function () {});
-  }
   function loadDays() {
     fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
       var daily = files.indexOf("daily.csv") >= 0;
@@ -498,8 +477,8 @@ nav a[hidden] { display: none !important; }
         }).join("") : "");
     }).catch(function () {});
   }
-  load(); loadToday(); loadDays();
-  setInterval(load, 60000); setInterval(loadToday, 30000); setInterval(loadDays, 300000);
+  load(); loadDays();
+  setInterval(load, 60000); setInterval(loadDays, 300000);
 })();
 </script>
 </body>
