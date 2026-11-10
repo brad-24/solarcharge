@@ -2255,15 +2255,16 @@ class Controller(object):
         with self.lock:
             done = list(self.sessions)
             cur = self._session_view(self.session, now) if self.session else None
-        # add away sessions from TeslaTrack, skipping any already held from before the split
-        held = [x["start"] for x in done if x.get("away")]
+        # add away sessions from TeslaTrack. Its records replace any away session SolarCharge itself
+        # recorded at the same time before the split, which used an estimated price
+        tt = []
         for a in self.tt_charging or []:
             try:
-                st, en, kwh = int(a["start"]), int(a["end"]), float(a["kwh"])
+                tt.append((int(a["start"]), int(a["end"]), float(a["kwh"]), a))
             except (KeyError, TypeError, ValueError):
                 continue
-            if any(abs(st - h) < 900 for h in held):
-                continue
+        done = [x for x in done if not (x.get("away") and any(abs(x["start"] - t[0]) < 3600 for t in tt))]
+        for st, en, kwh, a in tt:
             place = a.get("place") or ""
             mins = max(1, int(round((en - st) / 60.0)))
             done.append({"start": st, "end": en, "kwh": kwh, "solar_kwh": 0.0, "grid_kwh": kwh, "solar_pct": 0,
