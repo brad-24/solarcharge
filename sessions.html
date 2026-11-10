@@ -255,34 +255,42 @@ nav a[hidden] { display: none !important; }
   }
 
   // distance from the car's odometer (TeslaTrack), and what the same kilometres would cost in fuel
-  function odoAt(days, key) {
-    // odometer at the start of the day `key`: the reading at the end of the last day before it
-    var best = null, bk = "";
-    for (var k in days) if (k < key && k > bk) { bk = k; best = days[k]; }
-    return best;
+  // Odometer at the start of day `key`: the reading at the end of the last recorded day before it.
+  // Before TeslaTrack's first record, it's estimated on a straight line from the delivery date
+  // and odometer (config.ini) to that first record. Returns [km, estimated].
+  function dayNum(k) { return Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10)) / 864e5; }
+  function odoAt(dist, key) {
+    var keys = Object.keys(dist.days).sort(), before = null;
+    for (var i = 0; i < keys.length; i++) if (keys[i] < key) before = keys[i];
+    if (before) return [dist.days[before], false];
+    var dv = dist.delivery;
+    if (!dv || !keys.length) return [null, true];
+    if (key <= dv.date) return [dv.odo, false];
+    var first = keys[0], span = dayNum(first) + 1 - dayNum(dv.date);   // first record is an end of day reading
+    var frac = span > 0 ? Math.min(1, (dayNum(key) - dayNum(dv.date)) / span) : 1;
+    return [dv.odo + (dist.days[first] - dv.odo) * frac, true];
   }
   function renderFuel(cost) {
     var dist = data.distance, f = data.fuel || {};
     $("t-fuellbl").textContent = "Compared with " + (f.name || "fuel");
-    if (!dist || dist.now == null || !dist.days) {
-      $("t-km").innerHTML = "<span class='muted'>n/a</span>";
-      $("t-kmsub").textContent = "needs TeslaTrack";
+    var na = function (why) {
+      $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
-      return;
-    }
+    };
+    if (!dist || dist.now == null || !dist.days) return na("needs TeslaTrack");
     var r = range(period), now = new Date();
     var key = function (dt) { return dt.getFullYear() + "-" + ("0" + (dt.getMonth() + 1)).slice(-2) + "-" + ("0" + dt.getDate()).slice(-2); };
-    var startOdo = odoAt(dist.days, key(r[0]));
-    var endOdo = r[1] > now ? dist.now : odoAt(dist.days, key(r[1]));
-    if (startOdo == null) startOdo = 0;                  // before any record: the car was new
-    if (endOdo == null) endOdo = startOdo;
-    var km = Math.max(0, endOdo - startOdo);
-    $("t-km").innerHTML = Math.round(km).toLocaleString() + "<small>km</small>";
-    $("t-kmsub").textContent = km >= 1 ? (100 * cost / km).toFixed(1) + "c per km to charge" : " ";
+    var a = odoAt(dist, key(r[0])), b = r[1] > now ? [dist.now, false] : odoAt(dist, key(r[1]));
+    if (a[0] == null) a = [dist.delivery ? dist.delivery.odo : 0, true];
+    if (b[0] == null) return na("no odometer readings yet for this period");
+    var km = Math.max(0, b[0] - a[0]), est = a[1] || b[1];
+    $("t-km").innerHTML = Math.round(km).toLocaleString() + "<small>km" + (est ? " est." : "") + "</small>";
+    $("t-kmsub").textContent = km >= 1 ? (100 * cost / km).toFixed(1) + "c per km to charge" : "no driving recorded";
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
     $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
-    $("t-fuelsub").textContent = money(fuel) + " of " + (f.name || "fuel") + " at " + f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L";
+    $("t-fuelsub").textContent = money(fuel) + " of " + (f.name || "fuel") + " (" + Math.round(km * f.l_per_100km / 100) + " L at " +
+      f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L)";
   }
 
   function renderTable(list, live) {

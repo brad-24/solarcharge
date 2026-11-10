@@ -71,6 +71,9 @@ DEFAULTS = {
         # TeslaTrack on this Pi (for example http://localhost:8084). When set, the car's battery level,
         # charge limit and time to full come from TeslaTrack instead of SolarCharge's own stream.
         "teslatrack_url": "",
+        # when you got the car and its odometer then, so distance before TeslaTrack's records can be estimated
+        "delivery_date": "",
+        "delivery_odometer_km": "0",
         "battery_kwh": "60",
     },
     "schedule": {
@@ -182,6 +185,8 @@ class Settings(object):
         self.vehicle_poll_min = gf("tesla", "vehicle_poll_minutes")
         self.stream = gb("tesla", "stream")
         self.teslatrack_url = g("tesla", "teslatrack_url").rstrip("/")
+        self.delivery_date = g("tesla", "delivery_date").strip()
+        self.delivery_odo = gf("tesla", "delivery_odometer_km")
         self.battery_kwh = gf("tesla", "battery_kwh")
 
         self.full_every = max(1, gi("schedule", "full_charge_every_days"))
@@ -2269,6 +2274,8 @@ class Controller(object):
         try:
             with urlopen(self.s.teslatrack_url + "/api/odometer", timeout=5) as r:
                 val = json.loads(r.read().decode("utf-8"))
+            if self.s.delivery_date:
+                val["delivery"] = {"date": self.s.delivery_date, "odo": self.s.delivery_odo}
         except Exception:
             val = None
         self._odo_cache = (time.time(), val)
