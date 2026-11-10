@@ -145,6 +145,10 @@ DEFAULTS = {
         "feed_in_c_per_kwh": "5",
         "supply_c_per_day": "0",
         "bill_day": "1",
+        # for the Sessions page's comparison with a fuel car
+        "fuel_l_per_100km": "8",
+        "fuel_c_per_l": "200",
+        "fuel_name": "petrol",
     },
     "web": {
         "bind": "0.0.0.0",
@@ -250,6 +254,9 @@ class Settings(object):
         self.feed_in_price = gf("tariff", "feed_in_c_per_kwh") / 100.0
         self.supply_price = gf("tariff", "supply_c_per_day") / 100.0
         self.bill_day = min(28, max(1, gi("tariff", "bill_day")))
+        self.fuel_l100 = gf("tariff", "fuel_l_per_100km")
+        self.fuel_price = gf("tariff", "fuel_c_per_l") / 100.0
+        self.fuel_name = g("tariff", "fuel_name").strip() or "fuel"
 
         if self.default_mode not in MODES:
             self.default_mode = "solar"
@@ -2250,6 +2257,23 @@ class Controller(object):
             "eff_pct": int(round(100.0 * ss["batt_kwh"] / kwh)) if ss.get("batt_kwh") and kwh > 0.5 else None,
         }
 
+    _odo_cache = (0, None)
+
+    def get_distance(self):
+        """The car's odometer history from TeslaTrack, for distance driven over a period (cached 5 minutes)."""
+        if not self.s.teslatrack_url:
+            return None
+        t, val = self._odo_cache
+        if time.time() - t < 300:
+            return val
+        try:
+            with urlopen(self.s.teslatrack_url + "/api/odometer", timeout=5) as r:
+                val = json.loads(r.read().decode("utf-8"))
+        except Exception:
+            val = None
+        self._odo_cache = (time.time(), val)
+        return val
+
     def get_sessions(self):
         now = self.clock()
         with self.lock:
@@ -2274,7 +2298,8 @@ class Controller(object):
                          "actual": bool(a.get("actual")),
                          "place": place})
         done.sort(key=lambda x: x["start"])
-        return {"sessions": done, "current": cur,
+        return {"sessions": done, "current": cur, "distance": self.get_distance(),
+                "fuel": {"l_per_100km": self.s.fuel_l100, "price": self.s.fuel_price, "name": self.s.fuel_name},
                 "import_price": self.s.import_price, "feed_in_price": self.s.feed_in_price}
 
     def _account(self, now, dt, inv, car_w):

@@ -52,8 +52,8 @@ nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--sha
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 550; }
 .btn { margin-left: auto; font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .btn:hover { border-color: var(--text-3); }
-.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
-@media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 .tile .label { font-size: 12px; color: var(--text-2); }
 .tile .value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -157,6 +157,8 @@ nav a[hidden] { display: none !important; }
     <div class="card tile"><div class="label">From grid</div><div class="value" id="t-grid">&nbsp;</div><div class="sub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">&nbsp;</div><div class="sub" id="t-costsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Saved by solar</div><div class="value" id="t-saved">&nbsp;</div><div class="sub">vs charging from the grid</div></div>
+    <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label" id="t-fuellbl">Compared with fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
   </section>
 
   <section class="card" style="margin-bottom:14px">
@@ -247,8 +249,40 @@ nav a[hidden] { display: none !important; }
     $("t-cost").textContent = money(cost);
     $("t-costsub").textContent = total > 0 ? Math.round(100 * cost / total) + "c per kWh average" : " ";
     $("t-saved").textContent = money(saved);
+    renderFuel(cost);
     renderTable(list, live);
     renderChart(list);
+  }
+
+  // distance from the car's odometer (TeslaTrack), and what the same kilometres would cost in fuel
+  function odoAt(days, key) {
+    // odometer at the start of the day `key`: the reading at the end of the last day before it
+    var best = null, bk = "";
+    for (var k in days) if (k < key && k > bk) { bk = k; best = days[k]; }
+    return best;
+  }
+  function renderFuel(cost) {
+    var dist = data.distance, f = data.fuel || {};
+    $("t-fuellbl").textContent = "Compared with " + (f.name || "fuel");
+    if (!dist || dist.now == null || !dist.days) {
+      $("t-km").innerHTML = "<span class='muted'>n/a</span>";
+      $("t-kmsub").textContent = "needs TeslaTrack";
+      $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
+      return;
+    }
+    var r = range(period), now = new Date();
+    var key = function (dt) { return dt.getFullYear() + "-" + ("0" + (dt.getMonth() + 1)).slice(-2) + "-" + ("0" + dt.getDate()).slice(-2); };
+    var startOdo = odoAt(dist.days, key(r[0]));
+    var endOdo = r[1] > now ? dist.now : odoAt(dist.days, key(r[1]));
+    if (startOdo == null) startOdo = 0;                  // before any record: the car was new
+    if (endOdo == null) endOdo = startOdo;
+    var km = Math.max(0, endOdo - startOdo);
+    $("t-km").innerHTML = Math.round(km).toLocaleString() + "<small>km</small>";
+    $("t-kmsub").textContent = km >= 1 ? (100 * cost / km).toFixed(1) + "c per km to charge" : " ";
+    if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
+    var fuel = km * f.l_per_100km / 100 * f.price;
+    $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
+    $("t-fuelsub").textContent = money(fuel) + " of " + (f.name || "fuel") + " at " + f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L";
   }
 
   function renderTable(list, live) {
