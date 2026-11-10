@@ -249,9 +249,7 @@ dl.kv dt { color: var(--text-2); }
 dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .ok { color: var(--good); } .bad { color: var(--crit); } .warn { color: var(--warn); }
 
-.today { grid-template-columns: repeat(6, 1fr); margin-bottom: 14px; }
-@media (max-width: 900px) { .today { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 480px) { .today { grid-template-columns: repeat(2, 1fr); } }
+.today { grid-template-columns: repeat(3, 1fr); margin-bottom: 14px; }
 .stat .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .stat .value small { font-size: 13px; color: var(--text-2); font-weight: 500; margin-left: 2px; }
 .stat .label { font-size: 12px; color: var(--text-2); }
@@ -533,11 +531,8 @@ ul.events.tall { max-height: 640px; }
   </section>
   <section class="grid today">
     <div class="card stat"><div class="label">Solar today</div><div class="value" id="t-pv"></div></div>
-    <div class="card stat"><div class="label">Car charged</div><div class="value" id="t-car"></div></div>
-    <div class="card stat"><div class="label">Car from solar</div><div class="value" id="t-share"></div></div>
     <div class="card stat"><div class="label">Exported</div><div class="value" id="t-exp"></div></div>
-    <div class="card stat"><div class="label">Imported</div><div class="value" id="t-imp"></div></div>
-    <div class="card stat"><div class="label">Starts / stops</div><div class="value" id="t-ss"></div></div>
+    <div class="card stat"><div class="label">Grid</div><div class="value" id="t-imp"></div></div>
   </section>
 
   <section class="card" style="margin-bottom:14px">
@@ -579,16 +574,6 @@ ul.events.tall { max-height: 640px; }
     <div class="chartnote" id="enote"></div>
   </section>
 
-  <section class="grid">
-    <div class="card">
-      <h2>Daily totals</h2>
-      <table>
-        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Grid kWh</th></tr></thead>
-        <tbody id="days"></tbody>
-      </table>
-      <div class="exports" id="exports"></div>
-    </div>
-  </section>
   </div>
   <footer id="footer"></footer>
 </div>
@@ -745,11 +730,8 @@ ul.events.tall { max-height: 640px; }
     setText("k-cmd", t.commands + (s.dry_run ? " <span class='muted'>(would have sent)</span>" : ""));
 
     setText("t-pv", t.pv_kwh.toFixed(1) + "<small>kWh</small>");
-    setText("t-car", t.car_kwh.toFixed(1) + "<small>kWh</small>");
-    setText("t-share", t.solar_share === null ? "<span class='muted'>n/a</span>" : t.solar_share + "<small>%</small>");
     setText("t-exp", t.export_kwh.toFixed(1) + "<small>kWh</small>");
     setText("t-imp", t.import_kwh.toFixed(1) + "<small>kWh</small>");
-    setText("t-ss", t.starts + " / " + t.stops);
 
     var ev = s.events.map(function (e) { return "<li><time>" + hm(e.t) + "</time><span>" + esc(e.msg) + "</span></li>"; }).join("");
     setText("events", ev || "<li><span></span><span class='muted'>Nothing yet</span></li>");
@@ -765,35 +747,12 @@ ul.events.tall { max-height: 640px; }
     fetch("/api/history?minutes=4320", { cache: "no-store" }).then(function (r) { return r.json(); })
       .then(function (h) { history = h || []; loadLong(); drawChart(); }).catch(function () {});
   }
-  function pollExports() {
-    fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
-      var daily = files.indexOf("daily.csv") >= 0;
-      var months = files.filter(function (f) { return /^minutes-\d{4}-\d{2}\.csv$/.test(f); });
-      if (!daily && !months.length) {
-        $("exports").textContent = "Downloads appear here after the first full day is archived (just after midnight).";
-        return;
-      }
-      $("exports").innerHTML = "Download: " + (daily ? "<a href='/export/daily.csv' download>Daily totals (CSV)</a>" : "") +
-        (months.length ? "<br>Minute data: " + months.map(function (f) {
-          var ym = f.slice(8, 15), dt = new Date(ym + "-15T12:00:00");
-          return "<a href='/export/" + f + "' download>" + dt.toLocaleDateString([], { month: "short", year: "numeric" }) + "</a>";
-        }).join("") : "");
-    }).catch(function () {});
-  }
   function pollDays() {
     fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
       daysData = d; drawEnergy();
-      var keys = Object.keys(d).sort().reverse().slice(0, 14);
-      $("days").innerHTML = keys.map(function (k) {
-        var x = d[k], car = x.car_wh / 1000, share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
-        var dt = new Date(k + "T12:00:00");
-        var label = dt.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + car.toFixed(1) + "</td><td>" + share + "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
-      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
     }).catch(function () {});
   }
-
-  // ---- tabs (Dashboard, Status, Meter) kept in the address so a refresh stays put
+  // ---- tabs (Dashboard, Meter, Status) kept in the address so a refresh stays put
   var TABS = ["dashboard", "status", "meter"];
   function showTab() {
     var t = location.hash.slice(1);
@@ -1225,10 +1184,9 @@ ul.events.tall { max-height: 640px; }
   }
 
   showTab();
-  poll(); pollHistory(); pollDays(); pollSchedule(); pollExports(); pollWeather(); pollBill();
+  poll(); pollHistory(); pollDays(); pollSchedule(); pollWeather(); pollBill();
   setInterval(pollBill, 300000);
   setInterval(pollWeather, 600000);
-  setInterval(pollExports, 3600000);
   setInterval(pollSchedule, 120000);
   setInterval(poll, 10000);
   setInterval(tickClock, 1000);

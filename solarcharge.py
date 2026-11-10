@@ -1133,7 +1133,11 @@ class TeslaTrackFeed(object):
         th.start()
 
     def _run(self):
+        n = 0
         while True:
+            if n % 20 == 0:
+                self._charging()
+            n += 1
             try:
                 with urlopen(self.s.teslatrack_url + "/api/vehicle", timeout=5) as r:
                     v = json.loads(r.read().decode("utf-8"))
@@ -1152,6 +1156,17 @@ class TeslaTrackFeed(object):
                     log.info("Car data from TeslaTrack unavailable (%s)", e)
                 self.connected = False
             time.sleep(15)
+
+    def _charging(self):
+        """Away charging sessions (public chargers, Superchargers) that TeslaTrack recorded,
+        shown on the Sessions page next to the home ones. Every 5 minutes."""
+        try:
+            with urlopen(self.s.teslatrack_url + "/api/charging", timeout=5) as r:
+                recs = json.loads(r.read().decode("utf-8"))
+            if isinstance(recs, list):
+                self.ctl.tt_charging = recs
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------- simulator
@@ -1408,6 +1423,7 @@ class Controller(object):
         self.zero_since_stop = True      # the draw fell to nothing at some point after that stop
         self.cloud_cap_noted = False     # logged that today's Teslemetry amp increases are used up
         self.wc_plugged = False          # Wall Charger says the car is plugged in (so it's at home)
+        self.tt_charging = []            # away charging sessions recorded by TeslaTrack
         self.tt_home_days = None         # weekdays the car is usually home, learned by TeslaTrack
         self.self_starts = deque()       # times the car restarted by itself, to catch a stop and start loop
         self.grid_samples = deque()
@@ -2239,6 +2255,23 @@ class Controller(object):
         with self.lock:
             done = list(self.sessions)
             cur = self._session_view(self.session, now) if self.session else None
+        # add away sessions from TeslaTrack, skipping any already held from before the split
+        held = [x["start"] for x in done if x.get("away")]
+        for a in self.tt_charging or []:
+            try:
+                st, en, kwh = int(a["start"]), int(a["end"]), float(a["kwh"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if any(abs(st - h) < 900 for h in held):
+                continue
+            place = a.get("place") or ""
+            mins = max(1, int(round((en - st) / 60.0)))
+            done.append({"start": st, "end": en, "kwh": kwh, "solar_kwh": 0.0, "grid_kwh": kwh, "solar_pct": 0,
+                         "charge_min": mins, "plugged_min": mins, "peak_kw": None, "batt_kwh": kwh, "eff_pct": None,
+                         "cost": a.get("cost") or 0.0, "saved": 0.0, "away": True, "kind": a.get("kind", "dc"),
+                         "supercharger": bool(a.get("supercharger")) or "supercharger" in place.lower(),
+                         "place": place})
+        done.sort(key=lambda x: x["start"])
         return {"sessions": done, "current": cur,
                 "import_price": self.s.import_price, "feed_in_price": self.s.feed_in_price}
 

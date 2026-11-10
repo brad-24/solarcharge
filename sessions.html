@@ -15,7 +15,7 @@
   color-scheme: light;
   --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
   --text: #0b0b0b; --text-2: #52514e; --text-3: #7c7a74; --grid: #e6e4de;
-  --s-solar: #eb6834; --s-grid: #2a78d6; --good: #0a8a0a; --accent: #2a78d6; --accent-ink: #fff;
+  --s-solar: #eb6834; --s-grid: #2a78d6; --good: #0a8a0a; --crit: #d03b3b; --accent: #2a78d6; --accent-ink: #fff;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark) {
@@ -23,14 +23,14 @@
     color-scheme: dark;
     --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
     --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
-    --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --accent: #3987e5; --shadow: none;
+    --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --accent: #3987e5; --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2b;
   --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2a2a27;
-  --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --accent: #3987e5; --shadow: none;
+  --s-solar: #d95926; --s-grid: #3987e5; --good: #2fbf2f; --crit: #e66767; --accent: #3987e5; --shadow: none;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -87,6 +87,14 @@ tr.month .msum { font-size: 13px; color: var(--text-3); margin-left: 10px; }
 tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
 .pill.away { color: var(--accent); }
+.pill.sc { color: var(--crit); }
+.tiles.three { grid-template-columns: repeat(3, 1fr); }
+.exports { font-size: 13px; color: var(--text-3); margin-top: 12px; line-height: 1.7; }
+.exports a { color: var(--accent); text-decoration: none; margin-right: 10px; white-space: nowrap; }
+.exports a:hover { text-decoration: underline; }
+table.days th, table.days td { text-align: right; }
+table.days th:first-child, table.days td:first-child { text-align: left; }
+@media (max-width: 700px) { table.days th { white-space: normal; } }
 .share { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .share .bar { width: 46px; height: 6px; border-radius: 3px; background: var(--s-grid); overflow: hidden; display: inline-block; }
 .share .bar i { display: block; height: 100%; background: var(--s-solar); }
@@ -116,6 +124,12 @@ nav a[hidden] { display: none !important; }
     <nav><a href="/#dashboard">Dashboard</a><a href="/#meter">Meter</a><a href="/sessions" class="on">Sessions</a><a href="/#status">Status</a></nav>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
+
+  <section class="tiles three">
+    <div class="card tile"><div class="label">Car charged today</div><div class="value" id="d-car">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Car from solar today</div><div class="value" id="d-share">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Starts / stops today</div><div class="value" id="d-ss">&nbsp;</div></div>
+  </section>
 
   <div class="toolbar">
     <div class="seg" id="period">
@@ -159,6 +173,16 @@ nav a[hidden] { display: none !important; }
         <tbody id="rows"></tbody>
       </table>
     </div>
+  </section>
+  <section class="card" style="margin-top:14px">
+    <div class="charthead"><h2>Daily totals</h2></div>
+    <div class="tablewrap">
+      <table class="days">
+        <thead><tr><th>Day</th><th>Solar kWh</th><th>Car kWh</th><th>From solar</th><th>Grid kWh</th></tr></thead>
+        <tbody id="days"></tbody>
+      </table>
+    </div>
+    <div class="exports" id="exports"></div>
   </section>
   <footer id="footer">A session runs from plugging in to unplugging. Costs use the tariff in config.ini at the time of each session.</footer>
 </div>
@@ -239,7 +263,8 @@ nav a[hidden] { display: none !important; }
         var html = "";
         var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
         var span = hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
-        var where = s.away ? "<span class='pill away'>" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>" : "";
+        var where = !s.away ? "" : s.supercharger ? "<span class='pill sc'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">Supercharger</span>" :
+          "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
           "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
@@ -359,7 +384,8 @@ nav a[hidden] { display: none !important; }
     inPeriod().slice().reverse().forEach(function (s) {
       var row = [dayKey(s.start), hm(s.start), s.live ? "" : hm(s.end)];
       cols.slice(2).forEach(function (c) {
-        var v = c === "where" ? (s.away ? (s.kind === "dc" ? "away fast charger" : "away public AC") : "home") : s[c];
+        var v = c === "where" ? (s.away ? (s.supercharger ? "Supercharger" : s.kind === "dc" ? "away fast charger" : "away public AC") +
+          (s.place ? " (" + String(s.place).replace(/[,"]/g, " ") + ")" : "") : "home") : s[c];
         row.push(v === undefined || v === null ? "" : v);
       });
       lines.push(row.join(","));
@@ -376,7 +402,40 @@ nav a[hidden] { display: none !important; }
       .then(function (j) { data = j; render(); }).catch(function () {});
   }
   window.addEventListener("resize", function () { clearTimeout(window._rz); window._rz = setTimeout(function () { if (data) renderChart(inPeriod()); }, 150); });
-  load(); setInterval(load, 60000);
+  function loadToday() {
+    fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (st) {
+      var t = st.today;
+      $("d-car").innerHTML = t.car_kwh.toFixed(1) + "<small>kWh</small>";
+      $("d-share").innerHTML = t.solar_share === null ? "<span class='muted'>n/a</span>" : t.solar_share + "<small>%</small>";
+      $("d-ss").textContent = t.starts + " / " + t.stops;
+    }).catch(function () {});
+  }
+  function loadDays() {
+    fetch("/api/days", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (dd) {
+      var keys = Object.keys(dd).sort().reverse().slice(0, 14);
+      $("days").innerHTML = keys.map(function (k) {
+        var x = dd[k], share = x.car_wh > 50 ? Math.round(100 * x.car_solar_wh / x.car_wh) + "%" : "<span class='muted'>n/a</span>";
+        var label = new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+        return "<tr><td>" + label + "</td><td>" + (x.pv_wh / 1000).toFixed(1) + "</td><td>" + (x.car_wh / 1000).toFixed(1) + "</td><td>" + share +
+          "</td><td>" + (x.import_wh / 1000).toFixed(1) + "</td></tr>";
+      }).join("") || "<tr><td colspan='5' class='muted'>No data yet</td></tr>";
+    }).catch(function () {});
+    fetch("/api/export", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (files) {
+      var daily = files.indexOf("daily.csv") >= 0;
+      var months = files.filter(function (f) { return /^minutes-\d{4}-\d{2}\.csv$/.test(f); });
+      if (!daily && !months.length) {
+        $("exports").textContent = "Downloads appear here after the first full day is archived (just after midnight).";
+        return;
+      }
+      $("exports").innerHTML = "Download: " + (daily ? "<a href='/export/daily.csv' download>Daily totals (CSV)</a>" : "") +
+        (months.length ? "<br>Minute data: " + months.map(function (f) {
+          var dt = new Date(f.slice(8, 15) + "-15T12:00:00");
+          return "<a href='/export/" + f + "' download>" + dt.toLocaleDateString([], { month: "short", year: "numeric" }) + "</a>";
+        }).join("") : "");
+    }).catch(function () {});
+  }
+  load(); loadToday(); loadDays();
+  setInterval(load, 60000); setInterval(loadToday, 30000); setInterval(loadDays, 300000);
 })();
 </script>
 </body>
