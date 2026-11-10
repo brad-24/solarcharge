@@ -377,6 +377,16 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 .subhead { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
 .subh { font-size: 12px; font-weight: 600; color: var(--text-3); margin: 0; letter-spacing: .06em; text-transform: uppercase; }
 nav a[hidden] { display: none !important; }
+/* tabs stay at the top while scrolling; the shadow paints the page colour edge to edge behind them */
+header { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 12px 0; margin-top: -12px;
+  box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax -1px); }
+header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border); }
+@media (max-width: 600px) {
+  header { gap: 8px 10px; }
+  header h1 .t { display: none; }
+  header nav a { padding: 4px 8px; font-size: 13.5px; }
+}
+
 .tab[hidden] { display: none; }
 .hero .sched { margin-bottom: 0; }
 .hero .days7 { gap: 5px; }
@@ -405,7 +415,7 @@ ul.events.tall { max-height: 640px; }
 <body>
 <div class="wrap" id="wrap">
   <header>
-    <h1><img src="/img/icon-180.png" alt="">SolarCharge</h1>
+    <h1><img src="/img/icon-180.png" alt="SolarCharge"><span class="t">SolarCharge</span></h1>
     <nav class="nav" id="nav"><a href="#status" data-tab="status" class="on">Status</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a><a href="#system" data-tab="system">System</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
@@ -1192,6 +1202,13 @@ ul.events.tall { max-height: 640px; }
   setInterval(tickClock, 1000);
   setInterval(pollHistory, 60000);
   setInterval(pollDays, 300000);
+})();
+</script>
+<script>
+(function () {
+  var h = document.querySelector("header");
+  function f() { h.classList.toggle("stuck", window.scrollY > 4); }
+  window.addEventListener("scroll", f, { passive: true }); f();
 })();
 </script>
 </body>
