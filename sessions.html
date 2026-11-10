@@ -53,9 +53,9 @@ nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--sha
 .btn { margin-left: auto; font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .btn:hover { border-color: var(--text-3); }
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
-.tiles.drive { grid-template-columns: repeat(3, 1fr); }
+.tiles.drive { grid-template-columns: repeat(4, 1fr); }
 .group { font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); margin: 4px 2px 8px; }
-@media (max-width: 900px) { .tiles, .tiles.drive { grid-template-columns: repeat(2, 1fr); } .tiles.drive .tile:last-child { grid-column: span 2; } }
+@media (max-width: 900px) { .tiles, .tiles.drive { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 .tile .label { font-size: 12px; color: var(--text-2); }
 .tile .value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -154,6 +154,7 @@ nav a[hidden] { display: none !important; }
   <section class="tiles drive">
     <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label">Effective cost</div><div class="value" id="t-ecost">&nbsp;</div><div class="sub" id="t-ecostsub">&nbsp;</div></div>
     <div class="card tile"><div class="label" id="t-fuellbl">Compared with fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
   </section>
 
@@ -289,6 +290,7 @@ nav a[hidden] { display: none !important; }
       $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
       $("t-eff").innerHTML = "<span class='muted'>n/a</span>"; $("t-effsub").innerHTML = "&nbsp;";
+      $("t-ecost").innerHTML = "<span class='muted'>n/a</span>"; $("t-ecostsub").innerHTML = "&nbsp;";
     };
     if (!dist || dist.now == null || !dist.days) return na("needs TeslaTrack");
     var r = range(period), now = new Date();
@@ -298,7 +300,8 @@ nav a[hidden] { display: none !important; }
     if (b[0] == null) return na("no odometer readings yet for this period");
     var km = Math.max(0, b[0] - a[0]), est = a[1] || b[1];
     $("t-km").innerHTML = Math.round(km).toLocaleString() + "<small>km" + (est ? " est." : "") + "</small>";
-    $("t-kmsub").textContent = km >= 1 ? (100 * cost / km).toFixed(1) + "c per km to charge" : "no driving recorded";
+    var ntrips = tripsIn(r[0].getTime() / 1000, r[1].getTime() / 1000).length;
+    $("t-kmsub").textContent = km < 1 ? "no driving recorded" : ntrips ? ntrips + (ntrips === 1 ? " trip" : " trips") + " recorded" : "from the odometer";
     // driving efficiency from the car's own battery use on each trip (TeslaTrack), like the car shows;
     // the charged energy per km is higher, as it also covers charging losses and the car's use while parked
     var ra = r[0].getTime() / 1000, rb = r[1].getTime() / 1000, tk = 0, te = 0;
@@ -314,6 +317,18 @@ nav a[hidden] { display: none !important; }
       $("t-eff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
       $("t-effsub").textContent = "overall, incl. charging losses and use while parked (no trips recorded)";
     } else { $("t-eff").innerHTML = na2; $("t-effsub").textContent = "no trips recorded in this period"; }
+    // effective cost of driving: the average price paid per kWh charged, times the efficiency.
+    // A day or a week often has little charging, so then the all time average price is used
+    var effv = tk >= 5 ? 100 * te / tk : overall ? 100 * total / km : null;
+    var allS = (data.sessions || []).concat(data.current ? [data.current] : []);
+    var allK = sum(allS, "kwh"), allC = sum(allS, "cost");
+    var rate = total >= 5 ? cost / total : allK > 0 ? allC / allK : null, rateAll = total < 5;
+    if (effv && rate != null) {
+      var cpk = rate * effv;          // cents per km: ($/kWh x kWh/100 km) is $ per 100 km, which is c per km
+      $("t-ecost").innerHTML = cpk.toFixed(1) + "<small>c per km</small>";
+      $("t-ecostsub").textContent = money(cpk) + " per 100 km: " + Math.round(rate * 100) + "c/kWh" + (rateAll ? " (all time average)" : "") +
+        " \u00d7 " + effv.toFixed(1) + " kWh/100 km";
+    } else { $("t-ecost").innerHTML = na2; $("t-ecostsub").textContent = "needs trips and charging"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
     $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
