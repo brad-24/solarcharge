@@ -284,9 +284,7 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tip .r { display: flex; align-items: center; gap: 7px; }
 .tip .r b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart.short { height: 220px; }
-.chart .bar { shape-rendering: crispEdges; }
-.chart .dayhit { fill: transparent; }
-.chart .dayhit.on { fill: var(--text); opacity: .05; }
+.chart .earea { opacity: .1; }
 .swatch.dashed { height: 3px; width: 14px; border-radius: 0; background: repeating-linear-gradient(90deg, var(--dash, var(--text-3)) 0 4px, transparent 4px 7px) !important; }
 .carstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
 .carstats[hidden] { display: none; }
@@ -387,6 +385,9 @@ nav a[hidden] { display: none !important; }
 .hero .day7 { padding: 8px 2px; }
 .hero .day7 .lb { display: none; }
 ul.events.tall { max-height: 640px; }
+.bill { margin-bottom: 14px; }
+.billgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 760px) { .billgrid { grid-template-columns: 1fr; gap: 6px; } }
 .bill .billhead { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
 .billbig { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .billsub { font-size: 13px; color: var(--text-2); margin-top: 3px; }
@@ -516,6 +517,20 @@ ul.events.tall { max-height: 640px; }
   </div>
 
   <div class="tab" id="tab-meter" hidden>
+  <section class="card bill">
+    <h2>Upcoming bill</h2>
+    <div class="billgrid">
+      <div>
+        <div class="billhead">
+          <div><div class="billbig" id="b-total">&nbsp;</div><div class="billsub" id="b-period">&nbsp;</div></div>
+          <div class="billproj"><div class="lbl">Projected bill</div><div class="billmid" id="b-proj">&nbsp;</div></div>
+        </div>
+        <div class="billbar" title="How far through the billing period"><div class="fill" id="b-bar"></div></div>
+        <div class="billnote" id="b-note"></div>
+      </div>
+      <table class="billtbl"><tbody id="b-rows"></tbody></table>
+    </div>
+  </section>
   <section class="grid today">
     <div class="card stat"><div class="label">Solar today</div><div class="value" id="t-pv"></div></div>
     <div class="card stat"><div class="label">Car charged</div><div class="value" id="t-car"></div></div>
@@ -564,17 +579,7 @@ ul.events.tall { max-height: 640px; }
     <div class="chartnote" id="enote"></div>
   </section>
 
-  <section class="grid bottom">
-    <div class="card bill">
-      <h2>This bill</h2>
-      <div class="billhead">
-        <div><div class="billbig" id="b-total">&nbsp;</div><div class="billsub" id="b-period">&nbsp;</div></div>
-        <div class="billproj"><div class="lbl">Projected bill</div><div class="billmid" id="b-proj">&nbsp;</div></div>
-      </div>
-      <div class="billbar" title="How far through the billing period"><div class="fill" id="b-bar"></div></div>
-      <table class="billtbl"><tbody id="b-rows"></tbody></table>
-      <div class="billnote" id="b-note"></div>
-    </div>
+  <section class="grid">
     <div class="card">
       <h2>Daily totals</h2>
       <table>
@@ -832,7 +837,7 @@ ul.events.tall { max-height: 640px; }
     var steps = [1, 2, 5, 10, 20, 25, 50, 100], raw = ymax / 4, st = 100;
     for (var i = 0; i < steps.length; i++) if (steps[i] >= raw) { st = steps[i]; break; }
     ymax = Math.max(st * 4, 4);
-    var gw = iw / keys.length, bw = Math.max(1.5, Math.min(14, gw * 0.78 / 3));
+    var gw = iw / keys.length;
     var y = function (v) { return mt + ih - v / ymax * ih; };
     var html = "<g class='axis'>";
     for (i = 0; i <= 4; i++) {
@@ -847,40 +852,53 @@ ul.events.tall { max-height: 640px; }
         new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }) + "</text>";
     });
     html += "</g>";
-    keys.forEach(function (k, n) {
-      var x0 = ml + gw * (n + 0.5) - bw * 1.5, row = daysData[k];
-      html += "<rect class='dayhit' data-n='" + n + "' x='" + (ml + gw * n) + "' y='" + mt + "' width='" + gw + "' height='" + ih + "'/>";
-      if (!row) return;
-      ESER.forEach(function (s, j) {
-        var val = (row[s.key] || 0) / 1000, top = y(val);
-        html += "<rect class='bar' x='" + (x0 + j * bw).toFixed(1) + "' y='" + top.toFixed(1) + "' width='" + (bw - (bw > 4 ? 1 : 0)).toFixed(1) +
-          "' height='" + Math.max(0, mt + ih - top).toFixed(1) + "' style='fill:var(" + s.color + ")' pointer-events='none'/>";
-      });
+    var xd = function (n) { return ml + gw * (n + 0.5); };
+    ESER.forEach(function (s) {
+      var line = "", area = "", seg = [];
+      var flush = function () {
+        if (!seg.length) return;
+        var pts = seg.map(function (n) { return xd(n).toFixed(1) + "," + y((daysData[keys[n]][s.key] || 0) / 1000).toFixed(1); });
+        if (seg.length === 1) pts.push((xd(seg[0]) + 0.1).toFixed(1) + "," + y((daysData[keys[seg[0]]][s.key] || 0) / 1000).toFixed(1));
+        line += "M" + pts.join("L");
+        area += "M" + xd(seg[0]).toFixed(1) + "," + y(0) + "L" + pts.join("L") + "L" + xd(seg[seg.length - 1]).toFixed(1) + "," + y(0) + "Z";
+        seg = [];
+      };
+      keys.forEach(function (k, n) { if (daysData[k]) seg.push(n); else flush(); });
+      flush();
+      html += "<path class='earea' d='" + area + "' style='fill:var(" + s.color + ")'/>";
+      html += "<path class='line' d='" + line + "' style='stroke:var(" + s.color + ")'/>";
     });
+    html += "<line class='cross' id='ecross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
+    ESER.forEach(function (s, j) { html += "<circle class='dot' id='edot" + j + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
     var NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "Solar, exported and grid energy per day");
     svg.innerHTML = html;
     box.insertBefore(svg, tip);
-    var on = null;
+    var cross = svg.querySelector("#ecross");
     function show(ev) {
       var r = svg.getBoundingClientRect(), cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
-      var n = Math.floor((cx - ml) / gw);
-      if (n < 0 || n >= keys.length) return hide();
-      var k = keys[n], row = daysData[k];
-      if (on) on.classList.remove("on");
-      on = svg.querySelector(".dayhit[data-n='" + n + "']"); on.classList.add("on");
+      var n = Math.max(0, Math.min(keys.length - 1, Math.round((cx - ml) / gw - 0.5)));
+      var k = keys[n], row = daysData[k], px = xd(n);
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
+      ESER.forEach(function (s, j) {
+        var c = svg.querySelector("#edot" + j);
+        if (row) { c.setAttribute("cx", px); c.setAttribute("cy", y((row[s.key] || 0) / 1000)); c.style.display = ""; } else c.style.display = "none";
+      });
       tip.innerHTML = "<div class='t'>" + new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
         (row ? ESER.map(function (s) {
           return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + ((row[s.key] || 0) / 1000).toFixed(1) + " kWh</b></div>";
         }).join("") + "<div class='r'><span class='swatch' style='background:var(--s-car)'></span>Car<b>" + ((row.car_wh || 0) / 1000).toFixed(1) + " kWh</b></div>"
           : "<div class='muted'>No data</div>");
       tip.style.display = "block";
-      var px = ml + gw * (n + 0.5), tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
+      var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
       tip.style.left = Math.max(0, tx) + "px"; tip.style.top = (mt + 4) + "px";
     }
-    function hide() { tip.style.display = "none"; if (on) { on.classList.remove("on"); on = null; } }
+    function hide() {
+      tip.style.display = "none"; cross.style.display = "none";
+      ESER.forEach(function (s, j) { svg.querySelector("#edot" + j).style.display = "none"; });
+    }
     svg.addEventListener("mousemove", show);
     svg.addEventListener("touchstart", show, { passive: true });
     svg.addEventListener("touchmove", show, { passive: true });
