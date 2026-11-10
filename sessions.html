@@ -90,6 +90,7 @@ tr.live td { color: var(--text); }
 .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; color: var(--good); margin-left: 6px; }
 .pill.away { color: var(--accent); }
 .pill.sc { color: var(--sc); }
+.pill.est { color: var(--text-3); }
 @media (max-width: 480px) {
   .toolbar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   .toolbar .seg button { padding-left: 4px; padding-right: 4px; font-size: 13px; white-space: nowrap; }
@@ -316,8 +317,9 @@ nav a[hidden] { display: none !important; }
   function rowHtml(s) {
         var html = "";
         var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        var span = hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
-        var where = !s.away ? "" : s.supercharger ? "<span class='pill sc'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">Supercharger</span>" :
+        var span = s.estimated ? d(s.start).toLocaleDateString([], { day: "numeric", month: "short" }) + " to " +
+          d(s.end).toLocaleDateString([], { day: "numeric", month: "short" }) : hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
+        var where = s.estimated ? "<span class='pill est' title='" + esc(s.note || "Estimated") + "'>Estimated</span>" : !s.away ? "" : s.supercharger ? "<span class='pill sc'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">Supercharger</span>" :
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
