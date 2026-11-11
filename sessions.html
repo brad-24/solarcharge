@@ -407,8 +407,9 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
   function rowHtml(s) {
         var html = "";
         var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-        var span = s.estimated ? d(s.start).toLocaleDateString([], { day: "numeric", month: "short" }) + " to " +
-          d(s.end).toLocaleDateString([], { day: "numeric", month: "short" }) : hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
+        var dd = function (t) { return d(t).toLocaleDateString([], { day: "numeric", month: "short" }); };
+        var span = s.estimated ? (dd(s.start) === dd(s.end) ? dd(s.start) + ", time unknown" : dd(s.start) + " to " + dd(s.end)) :
+          hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
         var where = s.estimated ? "<span class='pill est' title='" + esc(s.note || "Estimated") + "'>Estimated</span>" : !s.away ? "" : s.supercharger ? "<span class='pill sc'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">Supercharger</span>" :
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
