@@ -21,7 +21,17 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 
 For trips, battery health, tyres, temperatures and the car's status, see the companion app **[TeslaTrack](https://github.com/brad-24/teslatrack)**. They run side by side on the same Pi.
 
-<img src="docs/phone.jpg" width="300" alt="Dashboard on a phone">
+The **Energy** tab: a running estimate of your electricity bill, today's totals, power through the day (up to 30 days) and daily solar, export and grid use.
+
+![Energy tab](docs/energy.jpg)
+
+The car's tab: charging and driving for any period, efficiency, cost per km and the saving compared with a fuel car, with every charging session and trip. Driving needs [TeslaTrack](https://github.com/brad-24/teslatrack).
+
+![Car tab](docs/car.jpg)
+
+On a phone, the tabs move to a bar along the bottom.
+
+<img src="docs/phone.jpg" width="300" alt="SolarCharge on a phone">
 
 ## What you need
 

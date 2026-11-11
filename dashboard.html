@@ -709,7 +709,9 @@ ul.events.tall { max-height: 640px; }
   function tickClock() {
     if (!clockBase) return;
     var t = clockBase[0] + (Date.now() / 1000 - clockBase[1]);
-    $("clock").textContent = new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    // on a phone, just the time, so the header fits on one line
+    var narrow = window.matchMedia && window.matchMedia("(max-width: 600px)").matches;
+    $("clock").textContent = new Date(t * 1000).toLocaleString([], narrow ? { hour: "numeric", minute: "2-digit" } : { weekday: "short", hour: "2-digit", minute: "2-digit" });
   }
 
   function render(s) {
