@@ -19,6 +19,7 @@ Run modes:
 
 import argparse
 import configparser
+import csv
 import json
 import logging
 import math
@@ -2284,6 +2285,23 @@ class Controller(object):
                 val = json.loads(r.read().decode("utf-8"))
             if self.s.delivery_date:
                 val["delivery"] = {"date": self.s.delivery_date, "odo": self.s.delivery_odo}
+            # odometer readings SolarCharge archived itself, before TeslaTrack took over the car data.
+            # Each day's reading is at the end of the day; the end of the day before is that less the
+            # distance driven, which fills in the day before the first reading too
+            if self.store:
+                try:
+                    with open(os.path.join(self.store.archive_dir, "daily.csv")) as f:
+                        for row in csv.DictReader(f):
+                            try:
+                                odo, drv = float(row.get("odometer_km") or ""), float(row.get("driven_km") or 0)
+                            except ValueError:
+                                continue
+                            day = row["date"]
+                            val["days"].setdefault(day, odo)
+                            prev = (date(*map(int, day.split("-"))) - timedelta(days=1)).isoformat()
+                            val["days"].setdefault(prev, round(odo - drv, 1))
+                except (IOError, KeyError):
+                    pass
         except Exception:
             val = None
         self._odo_cache = (time.time(), val)
