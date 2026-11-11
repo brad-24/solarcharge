@@ -128,9 +128,11 @@ header { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 
   box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax -1px); }
 header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border); }
 @media (max-width: 600px) {
-  header { gap: 8px 10px; }
+  header { gap: 8px 6px; }
   header h1 .t { display: none; }
-  header nav a { padding: 4px 8px; font-size: 13.5px; }
+  header h1 img { width: 26px; height: 26px; }
+  header nav a, header .nav a { padding: 4px 5px; font-size: 12.5px; }
+  header nav, header .nav { padding: 3px; }
 }
 
 </style>
@@ -139,7 +141,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
 <div class="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="SolarCharge"><span class="t">SolarCharge</span></h1>
-    <nav><a href="/#status">Status</a><a href="/#meter">Meter</a><a href="/sessions" class="on">Sessions</a><a href="/#system">System</a></nav>
+    <nav><a href="/#control">Control</a><a href="/#energy">Energy</a><a href="/sessions" class="on" id="nav-car">Sessions</a><a href="/#system">System</a></nav>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
@@ -262,7 +264,11 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
 
   function sum(list, k) { return list.reduce(function (t, s) { return t + (s[k] || 0); }, 0); }
 
+  function carName() {
+    if (data && data.car_name) { $("nav-car").textContent = data.car_name; document.title = data.car_name + " | SolarCharge"; }
+  }
   function render() {
+    carName();
     var all = inPeriod();
     var live = all.filter(function (s) { return s.live; });
     var list = all.filter(function (s) { return !s.live; });

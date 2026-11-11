@@ -382,9 +382,11 @@ header { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 
   box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax -1px); }
 header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border); }
 @media (max-width: 600px) {
-  header { gap: 8px 10px; }
+  header { gap: 8px 6px; }
   header h1 .t { display: none; }
-  header nav a { padding: 4px 8px; font-size: 13.5px; }
+  header h1 img { width: 26px; height: 26px; }
+  header nav a, header .nav a { padding: 4px 5px; font-size: 12.5px; }
+  header nav, header .nav { padding: 3px; }
 }
 
 .tab[hidden] { display: none; }
@@ -416,13 +418,13 @@ ul.events.tall { max-height: 640px; }
 <div class="wrap" id="wrap">
   <header>
     <h1><img src="/img/icon-180.png" alt="SolarCharge"><span class="t">SolarCharge</span></h1>
-    <nav class="nav" id="nav"><a href="#status" data-tab="status" class="on">Status</a><a href="#meter" data-tab="meter">Meter</a><a href="/sessions">Sessions</a><a href="#system" data-tab="system">System</a></nav>
+    <nav class="nav" id="nav"><a href="#control" data-tab="control" class="on">Control</a><a href="#energy" data-tab="energy">Energy</a><a href="/sessions" id="nav-car">Sessions</a><a href="#system" data-tab="system">System</a></nav>
     <span id="runpill" class="pill">Connecting</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
 
-  <div class="tab" id="tab-status">
+  <div class="tab" id="tab-control">
   <div class="hero">
   <section class="scene" aria-label="Live energy flow">
 <svg viewBox="0 0 1144 1190" role="img" aria-labelledby="scenetitle" id="scenesvg">
@@ -450,7 +452,7 @@ ul.events.tall { max-height: 640px; }
   </section>
   <section class="grid main">
     <div class="card">
-      <h2>Control</h2>
+      <h2>Mode</h2>
       <div class="reason" id="reason">Loading</div>
       <div class="modes" id="modes">
         <button type="button" data-mode="manual">Manual</button>
@@ -524,7 +526,7 @@ ul.events.tall { max-height: 640px; }
   </section>
   </div>
 
-  <div class="tab" id="tab-meter" hidden>
+  <div class="tab" id="tab-energy" hidden>
   <section class="card bill">
     <h2>Upcoming bill</h2>
     <div class="billgrid">
@@ -750,7 +752,7 @@ ul.events.tall { max-height: 640px; }
 
   function poll() {
     fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (s) { if (s && s.time) render(s); })
+      .then(function (s) { if (s && s.time) { render(s); if (s.car_name) $("nav-car").textContent = s.car_name; } })
       .catch(function () { var p = $("runpill"); p.className = "pill stale"; p.textContent = "Cannot reach the Pi"; });
   }
   function pollHistory() {
@@ -762,16 +764,17 @@ ul.events.tall { max-height: 640px; }
       daysData = d; drawEnergy();
     }).catch(function () {});
   }
-  // ---- tabs (Status, Meter, System) kept in the address so a refresh stays put
-  var TABS = ["status", "system", "meter"];
+  // ---- tabs (Control, Energy, System) kept in the address so a refresh stays put
+  var TABS = ["control", "system", "energy"], OLD = { status: "control", dashboard: "control", meter: "energy" };
   function showTab() {
     var t = location.hash.slice(1);
-    if (TABS.indexOf(t) < 0) t = "status";
+    t = OLD[t] || t;                              // old bookmarks still land on the right tab
+    if (TABS.indexOf(t) < 0) t = "control";
     TABS.forEach(function (n) { $("tab-" + n).hidden = n !== t; });
     Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab]"), function (a) {
       a.classList.toggle("on", a.getAttribute("data-tab") === t);
     });
-    if (t === "meter") { drawChart(); drawEnergy(); pollBill(); pollDays(); }
+    if (t === "energy") { drawChart(); drawEnergy(); pollBill(); pollDays(); }
   }
   window.addEventListener("hashchange", function () { showTab(); window.scrollTo(0, 0); });
 

@@ -72,6 +72,8 @@ DEFAULTS = {
         # TeslaTrack on this Pi (for example http://localhost:8084). When set, the car's battery level,
         # charge limit and time to full come from TeslaTrack instead of SolarCharge's own stream.
         "teslatrack_url": "",
+        # name for the car's tab (Sessions page), for example Tesla Model Y. Blank shows "Sessions"
+        "car_name": "",
         # when you got the car and its odometer then, so distance before TeslaTrack's records can be estimated
         "delivery_date": "",
         "delivery_odometer_km": "0",
@@ -187,6 +189,7 @@ class Settings(object):
         self.stream = gb("tesla", "stream")
         self.teslatrack_url = g("tesla", "teslatrack_url").rstrip("/")
         self.delivery_date = g("tesla", "delivery_date").strip()
+        self.car_name = g("tesla", "car_name").strip()
         self.delivery_odo = gf("tesla", "delivery_odometer_km")
         self.battery_kwh = gf("tesla", "battery_kwh")
 
@@ -2331,7 +2334,7 @@ class Controller(object):
                          "actual": bool(a.get("actual")),
                          "place": place})
         done.sort(key=lambda x: x["start"])
-        return {"sessions": done, "current": cur, "distance": self.get_distance(),
+        return {"sessions": done, "current": cur, "distance": self.get_distance(), "car_name": self.s.car_name,
                 "fuel": {"l_per_100km": self.s.fuel_l100, "price": self.s.fuel_price, "name": self.s.fuel_name},
                 "import_price": self.s.import_price, "feed_in_price": self.s.feed_in_price}
 
@@ -2459,6 +2462,7 @@ class Controller(object):
         snap = {
             "version": VERSION,
             "time": now,
+            "car_name": self.s.car_name,
             "dry_run": self.dry_run,
             "simulated": self.simulated,
             "mode": self.mode,
