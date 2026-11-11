@@ -329,8 +329,9 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
       $("t-eff").innerHTML = (100 * te / tk).toFixed(1) + "<small>kWh/100 km</small>";
       $("t-effsub").textContent = overall ? "driving. " + overall.charAt(0).toUpperCase() + overall.slice(1) : "driving, from the battery on " + Math.round(tk) + " km of trips";
     } else if (overall) {
-      $("t-eff").innerHTML = (100 * total / km).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = "overall, incl. charging losses and use while parked (no trips recorded)";
+      // no trips recorded (before TeslaTrack): leave driving efficiency blank rather than show a different measure
+      $("t-eff").innerHTML = na2;
+      $("t-effsub").textContent = "no trips recorded. " + overall.charAt(0).toUpperCase() + overall.slice(1);
     } else { $("t-eff").innerHTML = na2; $("t-effsub").textContent = "no trips recorded in this period"; }
     // effective cost of driving: the average price paid per kWh charged, times the efficiency.
     // A day or a week often has little charging, so then the all time average price is used
