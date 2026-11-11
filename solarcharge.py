@@ -2542,6 +2542,13 @@ class Handler(BaseHTTPRequestHandler):
         except IOError:
             self.send_error(500, name + " missing")
             return
+        # put the car's name into the tab before sending, so the page never shows the default first
+        car = self.controller.s.car_name if self.controller else ""
+        if car:
+            from html import escape
+            body = body.replace(b'id="nav-car">Sessions<', ('id="nav-car">%s<' % escape(car)).encode("utf-8"))
+            if name == "sessions.html":
+                body = body.replace(b"<title>SolarCharge Sessions</title>", ("<title>%s | SolarCharge</title>" % escape(car)).encode("utf-8"))
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
