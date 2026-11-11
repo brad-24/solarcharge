@@ -325,17 +325,25 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     // week, the battery level at the start and end swings it, so it's left out for those
     var na2 = "<span class='muted'>n/a</span>", long = period !== "today" && period !== "week";
     var overall = long && km >= 50 && total > 0 ? "overall " + (100 * total / km).toFixed(1) + ", incl. charging losses and use while parked" : "";
+    // with no trips in the period (before TeslaTrack), assume the efficiency of all the trips recorded since
+    var allTk = 0, allTe = 0;
+    trips().forEach(function (t) { if (t.kwh) { allTk += t.km; allTe += t.kwh; } });
+    var assumed = tk < 5 && allTk >= 20 && km >= 1 ? 100 * allTe / allTk : null;
+    var Overall = overall ? overall.charAt(0).toUpperCase() + overall.slice(1) : "";
     if (tk >= 5) {
       $("t-eff").innerHTML = (100 * te / tk).toFixed(1) + "<small>kWh/100 km</small>";
-      $("t-effsub").textContent = overall ? "driving. " + overall.charAt(0).toUpperCase() + overall.slice(1) : "driving, from the battery on " + Math.round(tk) + " km of trips";
+      $("t-effsub").textContent = overall ? "driving. " + Overall : "driving, from the battery on " + Math.round(tk) + " km of trips";
+    } else if (assumed) {
+      $("t-eff").innerHTML = assumed.toFixed(1) + "<small>kWh/100 km est.</small>";
+      $("t-effsub").textContent = "no trips recorded, so assumed from later trips: about " + Math.round(km * assumed / 100) +
+        " kWh for driving" + (overall ? ". " + Overall : "");
     } else if (overall) {
-      // no trips recorded (before TeslaTrack): leave driving efficiency blank rather than show a different measure
       $("t-eff").innerHTML = na2;
-      $("t-effsub").textContent = "no trips recorded. " + overall.charAt(0).toUpperCase() + overall.slice(1);
+      $("t-effsub").textContent = "no trips recorded. " + Overall;
     } else { $("t-eff").innerHTML = na2; $("t-effsub").textContent = "no trips recorded in this period"; }
     // effective cost of driving: the average price paid per kWh charged, times the efficiency.
     // A day or a week often has little charging, so then the all time average price is used
-    var effv = tk >= 5 ? 100 * te / tk : overall ? 100 * total / km : null;
+    var effv = tk >= 5 ? 100 * te / tk : assumed || (overall ? 100 * total / km : null);
     var allS = (data.sessions || []).concat(data.current ? [data.current] : []);
     var allK = sum(allS, "kwh"), allC = sum(allS, "cost");
     var rate = total >= 5 ? cost / total : allK > 0 ? allC / allK : null, rateAll = total < 5;
