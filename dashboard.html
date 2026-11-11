@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="color-scheme" content="light dark">
 <script>try { var t = localStorage.getItem("sc-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23121722%22/%3E%3Cg stroke=%22%23ffc53d%22 stroke-width=%224.5%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M32 6v6M32 52v6M6 32h6M52 32h6M13.6 13.6l4.2 4.2M46.2 46.2l4.2 4.2M13.6 50.4l4.2-4.2M46.2 17.8l4.2-4.2%22/%3E%3C/g%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2215%22 fill=%22%23ffc53d%22/%3E%3Cpath d=%22M35 19 L24 34 H31 L28 45 L40 29 H33 Z%22 fill=%22%23121722%22/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="/img/icon-180.png">
 <meta name="theme-color" content="#121722">
@@ -389,6 +389,21 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
   header nav, header .nav { padding: 3px; }
 }
 
+/* on a phone, the tabs move to a bar along the bottom with icons, like an app */
+.tabbar { display: none; }
+@media (max-width: 600px) {
+  header nav, header .nav { display: none; }
+  header h1 .t { display: inline; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface);
+    border-top: 1px solid var(--border); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .tabbar a { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 2px 0;
+    font-size: 11px; font-weight: 550; color: var(--text-3); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+  .tabbar a span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabbar a.on { color: var(--accent); }
+  .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+}
+
 .tab[hidden] { display: none; }
 .hero .sched { margin-bottom: 0; }
 .hero .days7 { gap: 5px; }
@@ -587,6 +602,7 @@ ul.events.tall { max-height: 640px; }
   </section>
 
   </div>
+<nav class="tabbar" id="tabbar" aria-label="Tabs"><a href="#control" data-tab="control" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Control</span></a><a href="#energy" data-tab="energy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Energy</span></a><a href="/sessions" ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v-3l2-5.5A2 2 0 0 1 7.9 6h8.2a2 2 0 0 1 1.9 1.5L20 13v3"/><path d="M3 16h18v2.5H3z"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg><span data-car>Sessions</span></a><a href="#system" data-tab="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>System</span></a></nav>
   <footer id="footer"></footer>
 </div>
 
@@ -771,7 +787,7 @@ ul.events.tall { max-height: 640px; }
     t = OLD[t] || t;                              // old bookmarks still land on the right tab
     if (TABS.indexOf(t) < 0) t = "control";
     TABS.forEach(function (n) { $("tab-" + n).hidden = n !== t; });
-    Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab]"), function (a) {
+    Array.prototype.forEach.call(document.querySelectorAll("#nav a[data-tab], #tabbar a[data-tab]"), function (a) {
       a.classList.toggle("on", a.getAttribute("data-tab") === t);
     });
     if (t === "energy") { drawChart(); drawEnergy(); pollBill(); pollDays(); }

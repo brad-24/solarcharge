@@ -2547,6 +2547,7 @@ class Handler(BaseHTTPRequestHandler):
         if car:
             from html import escape
             body = body.replace(b'id="nav-car">Sessions<', ('id="nav-car">%s<' % escape(car)).encode("utf-8"))
+            body = body.replace(b"<span data-car>Sessions<", ("<span data-car>%s<" % escape(car)).encode("utf-8"))
             if name == "sessions.html":
                 body = body.replace(b"<title>SolarCharge Sessions</title>", ("<title>%s | SolarCharge</title>" % escape(car)).encode("utf-8"))
         self.send_response(200)
