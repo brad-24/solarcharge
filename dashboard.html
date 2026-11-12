@@ -238,10 +238,11 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .modes button.on { background: var(--accent); color: var(--accent-ink); }
 .modes button:disabled { opacity: .6; cursor: wait; }
 .modehelp { font-size: 13px; color: var(--text-3); margin-top: 10px; min-height: 38px; }
-.limitrow { margin-top: 14px; }
-.limitrow .lhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-.limitrow .lhead span { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.limitrow .lhead b { font-size: 13px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.side .sched { margin-bottom: 0; }
+.limitcard .lhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.limitcard .lhead h2 { margin: 0; }
+.limitcard .lhead b { font-size: 13px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .limits { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; background: var(--surface-2); padding: 4px; border-radius: 10px; }
 .limits button { font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 8px 2px;
   background: transparent; color: var(--text-2); cursor: pointer; font-variant-numeric: tabular-nums; }
@@ -251,8 +252,9 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 @keyframes lpulse { 50% { opacity: .55; } }
 .limitnote { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 4px; }
 .limitnote.bad { color: var(--crit); }
+.limitnote:empty { display: none; }
 /* solar available for the car: a small dial under the charge limit; the green band is where there's enough to charge */
-.dial { display: flex; flex-direction: column; align-items: center; margin-top: 6px; cursor: default; }
+.dial { display: flex; flex-direction: column; align-items: center; margin-top: 10px; cursor: default; }
 .dial svg { width: 170px; height: auto; display: block; overflow: visible; }
 .dial .track { stroke: var(--surface-2); }
 .dial .band { stroke: var(--good); opacity: .35; }
@@ -497,13 +499,6 @@ ul.events.tall { max-height: 640px; }
         <button type="button" data-mode="fast">Fast</button>
       </div>
       <div class="modehelp" id="modehelp"></div>
-      <div class="limitrow">
-        <div class="lhead"><span>Charge limit</span><b id="limitval"></b></div>
-        <div class="limits" id="limits" role="group" aria-label="Charge limit" aria-describedby="limitnote">
-          <button type="button" data-p="50">50%</button><button type="button" data-p="60">60%</button><button type="button" data-p="70">70%</button><button type="button" data-p="80">80%</button><button type="button" data-p="90">90%</button><button type="button" data-p="100">100%</button>
-        </div>
-      </div>
-      <div class="limitnote" id="limitnote"></div>
       <div class="dial" id="dial" role="img" aria-label="Solar available for the car">
         <svg viewBox="0 0 120 70" aria-hidden="true">
           <path class="track" d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke-width="10" stroke-linecap="round"/>
@@ -519,6 +514,14 @@ ul.events.tall { max-height: 640px; }
       </div>
       </div>
     </div>
+    <div class="side">
+    <div class="card limitcard">
+      <div class="lhead"><h2>Charge limit</h2><b id="limitval"></b></div>
+      <div class="limits" id="limits" role="group" aria-label="Charge limit" aria-describedby="limitnote">
+        <button type="button" data-p="50">50%</button><button type="button" data-p="60">60%</button><button type="button" data-p="70">70%</button><button type="button" data-p="80">80%</button><button type="button" data-p="90">90%</button><button type="button" data-p="100">100%</button>
+      </div>
+      <div class="limitnote" id="limitnote"></div>
+    </div>
     <section class="card sched" id="sched" hidden>
       <div class="top">
         <div class="headline">
@@ -531,6 +534,7 @@ ul.events.tall { max-height: 640px; }
       </div>
       <div class="days7" id="sc-days"></div>
     </section>
+    </div>
   </section>
   </div>
 
