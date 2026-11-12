@@ -243,9 +243,9 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .limitrow input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
 .limitval { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 .limitset { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 8px; border: 0; cursor: pointer;
-  background: var(--accent); color: var(--accent-ink); }
-.limitset[hidden] { display: none; }
-.limitset:disabled { opacity: .6; cursor: wait; }
+  background: var(--accent); color: #fff; }
+.limitset { min-width: 76px; transition: background .15s, color .15s; }
+.limitset:disabled { background: var(--surface-2); color: var(--text-3); cursor: default; }
 .limitnote { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 2px; }
 .limitnote.bad { color: var(--crit); }
 .meter { margin-top: 14px; }
@@ -490,7 +490,7 @@ ul.events.tall { max-height: 640px; }
         <label for="limit">Charge limit</label>
         <input type="range" id="limit" min="50" max="100" step="5" value="80" aria-describedby="limitnote">
         <span class="limitval" id="limitval">&nbsp;</span>
-        <button type="button" class="limitset" id="limitset" hidden>Set</button>
+        <button type="button" class="limitset" id="limitset" disabled>Set</button>
       </div>
       <div class="limitnote" id="limitnote"></div>
       <div class="meter">
@@ -954,31 +954,32 @@ ul.events.tall { max-height: 640px; }
   }
 
   // ---- charge limit: the slider shows the car's limit until you move it; Set sends the change
-  var limitDirty = false, limitSent = null;
+  var limitDirty = false, limitSent = null, limitPrevT = null;   // limitPrevT: the result showing when Set was tapped
   function carLimit(s) { var v = s && s.tesla && s.tesla.vehicle; return v && v.limit ? Math.round(v.limit) : null; }
   function showLimit(s) {
     var cur = carLimit(s), st = s && s.limit_status, el = $("limit");
     var note = "", bad = false;
-    if (st && limitSent !== null && st.target === limitSent) {
-      if (st.state === "sending") note = "Setting to " + st.target + "%\u2026";
+    if (st && limitSent !== null && st.target === limitSent && st.t !== limitPrevT) {
+      if (st.state === "sending") note = "";
       else if (st.state === "ok") { note = "Set to " + st.target + "%"; limitSent = null; limitDirty = false; }
       else { note = "Couldn't set it: " + (st.msg || "the car didn't respond"); bad = true; limitSent = null; }
     } else if (cur === null && !limitDirty) note = "The car's limit shows here once it has reported it";
     if (!limitDirty && cur !== null) el.value = cur;
     $("limitval").textContent = limitDirty ? el.value + "%" : cur !== null ? cur + "%" : "n/a";
-    $("limitset").hidden = !limitDirty || limitSent !== null || +el.value === cur;
+    // Set is always there: active only when the slider differs from the car's limit
+    var btn = $("limitset");
+    btn.textContent = limitSent !== null ? "Setting\u2026" : "Set";
+    btn.disabled = limitSent !== null || !limitDirty || +el.value === cur;
     $("limitnote").textContent = note;
     $("limitnote").classList.toggle("bad", bad);
   }
   $("limit").addEventListener("input", function () { limitDirty = true; showLimit(state); });
   $("limitset").addEventListener("click", function () {
     var p = +$("limit").value, btn = this;
-    btn.disabled = true;
+    limitSent = p; limitPrevT = state && state.limit_status ? state.limit_status.t : null; btn.disabled = true; btn.textContent = "Setting\u2026"; $("limitnote").textContent = "";
     fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ percent: p }) })
-      .then(function (r) { if (!r.ok) throw new Error("rejected"); limitSent = p; $("limitnote").textContent = "Setting to " + p + "%\u2026";
-        btn.hidden = true; [1000, 4000, 10000, 30000].forEach(function (ms) { setTimeout(poll, ms); }); })
-      .catch(function () { $("limitnote").textContent = "Couldn't reach the Pi to change the limit."; $("limitnote").classList.add("bad"); })
-      .finally(function () { btn.disabled = false; });
+      .then(function (r) { if (!r.ok) throw new Error("rejected"); [1000, 4000, 10000, 30000].forEach(function (ms) { setTimeout(poll, ms); }); })
+      .catch(function () { limitSent = null; showLimit(state); $("limitnote").textContent = "Couldn't reach the Pi to change the limit."; $("limitnote").classList.add("bad"); });
   });
 
   function showMode(mode) {
