@@ -406,7 +406,7 @@ class Teslemetry(object):
             return True, reason
         if name == "charge_stop" and reason in ("not_charging",):
             return True, reason
-        if name == "set_charge_limit" and "already" in reason:
+        if name == "set_charge_limit" and ("already_set" in reason or "already set" in reason):
             return True, reason
         return False, reason
 
@@ -604,7 +604,9 @@ class BleTesla(object):
             return True, "not_charging"
         if name == "charge_start" and "complete" in low:
             return False, "complete"
-        if name == "set_charge_limit" and "already" in low:
+        # only a genuine "limit already set": "already connected to the maximum number of BLE devices"
+        # is Bluetooth being busy, and must fall through to the backup routes
+        if name == "set_charge_limit" and ("already_set" in low or "already set" in low) and "ble devices" not in low:
             return True, "already_set"
         return False, err or "failed"
 
