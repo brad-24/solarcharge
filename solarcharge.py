@@ -406,6 +406,8 @@ class Teslemetry(object):
             return True, reason
         if name == "charge_stop" and reason in ("not_charging",):
             return True, reason
+        if name == "set_charge_limit" and "already" in reason:
+            return True, reason
         return False, reason
 
     def charge_state(self):
@@ -602,11 +604,15 @@ class BleTesla(object):
             return True, "not_charging"
         if name == "charge_start" and "complete" in low:
             return False, "complete"
+        if name == "set_charge_limit" and "already" in low:
+            return True, "already_set"
         return False, err or "failed"
 
     def command(self, name, body=None):
         if name == "set_charging_amps":
             args = ["charging-set-amps", str(int((body or {}).get("charging_amps", 5)))]
+        elif name == "set_charge_limit":
+            args = ["charging-set-limit", str(int((body or {}).get("percent", 80)))]
         elif name in self.ARGS:
             args = list(self.ARGS[name])
         else:
@@ -792,6 +798,8 @@ class FleetTesla(object):
     def command(self, name, body=None):
         if name == "set_charging_amps":
             args = ["charging-set-amps", str(int((body or {}).get("charging_amps", 5)))]
+        elif name == "set_charge_limit":
+            args = ["charging-set-limit", str(int((body or {}).get("percent", 80)))]
         elif name in BleTesla.ARGS:
             args = list(BleTesla.ARGS[name])
         else:
@@ -896,7 +904,7 @@ class CarControl(object):
         if not self.cloud.configured():
             return False, err
         if self.ble.configured() and not (self.s.ble_fallback and
-                                          (busy or name in ("charge_start", "charge_stop") or reducing)):
+                                          (busy or name in ("charge_start", "charge_stop", "set_charge_limit") or reducing)):
             return False, err
         if self.ble.configured() or self._fleet_ok():
             log.warning("Using Teslemetry for %s instead", name)
@@ -1257,10 +1265,12 @@ class SimTesla(object):
             self.w.charging = False
         elif name == "set_charging_amps":
             self.w.amps = int((body or {}).get("charging_amps", self.w.amps))
+        elif name == "set_charge_limit":
+            self.w.limit = int((body or {}).get("percent", 80))
         return True, ""
 
     def charge_state(self):
-        return {"soc": int(48 + self.w.session_wh / 750.0), "limit": 80,
+        return {"soc": int(48 + self.w.session_wh / 750.0), "limit": getattr(self.w, "limit", 80),
                 "state": "Charging" if self.w.charging else "Stopped"}, ""
 
     def ping(self):
@@ -1417,6 +1427,8 @@ class Controller(object):
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.pending_mode = None
+        self.pending_limit = None
+        self.limit_status = None         # the last charge limit change asked for on the dashboard
 
         st = storage.load_state() if storage else {}
         self.mode = st.get("mode") if st.get("mode") in MODES else s.default_mode
@@ -1479,6 +1491,36 @@ class Controller(object):
         self.archived_through = st.get("archived_through")   # last day written to the archive
 
     # ---- public, called from web thread
+
+    def set_limit(self, percent):
+        """Charge limit change from the dashboard; sent from the control loop, like every car command."""
+        try:
+            p = int(percent)
+        except (TypeError, ValueError):
+            return False
+        if not 50 <= p <= 100:
+            return False
+        with self.lock:
+            self.pending_limit = p
+            self.limit_status = {"target": p, "state": "sending", "t": time.time(), "msg": ""}
+        self.wake.set()
+        return True
+
+    def _send_limit(self, p):
+        if self.s.dry_run or not self.tesla.configured():
+            ok, err = False, "dry run" if self.s.dry_run else "no route to the car is set up"
+        else:
+            ok, err = self.tesla.command("set_charge_limit", {"percent": p})
+        path = getattr(self.tesla, "last_path", "")
+        via = {"teslemetry": " via Teslemetry", "fleet": " via Tesla API"}.get(path, "") if ok else ""
+        with self.lock:
+            if ok:
+                self.vehicle = dict(self.vehicle or {}, limit=p)
+            self.limit_status = {"target": p, "state": "ok" if ok else "failed", "t": time.time(), "msg": "" if ok else err}
+        if ok:
+            self.event("Charge limit set to %d%%%s" % (p, via))
+        else:
+            self.event("Couldn't set the charge limit to %d%%: %s" % (p, err), logging.WARNING)
 
     def set_mode(self, mode):
         if mode not in MODES:
@@ -1717,6 +1759,9 @@ class Controller(object):
                     self.refused_until = 0.0
                 self.pending_mode = None
                 self._save(now)
+            limit, self.pending_limit = self.pending_limit, None
+        if limit is not None:
+            self._send_limit(limit)
 
         self._roll_day(now)
         if self.store and self.archived_through != (datetime.fromtimestamp(now).date() - timedelta(days=1)).isoformat():
@@ -2463,6 +2508,7 @@ class Controller(object):
             "version": VERSION,
             "time": now,
             "car_name": self.s.car_name,
+            "limit_status": self.limit_status,
             "dry_run": self.dry_run,
             "simulated": self.simulated,
             "mode": self.mode,
@@ -2622,6 +2668,15 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/fullcharge":
             self.controller.mark_full()
             self._json({"ok": True})
+            return
+        if u.path == "/api/limit":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(min(n, 4096)).decode("utf-8") or "{}")
+                ok = self.controller.set_limit(data.get("percent"))
+            except (ValueError, TypeError):
+                ok = False
+            self._json({"ok": ok} if ok else {"ok": False, "error": "limit must be 50 to 100"}, 200 if ok else 400)
             return
         if u.path != "/api/mode":
             self.send_error(404)

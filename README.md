@@ -11,6 +11,7 @@ SolarCharge reads a Sungrow inverter and smart meter every 10 seconds, then star
 * **Solar surplus charging** that follows the sun: starts when there is enough spare solar, raises and lowers the amps as clouds come and go, and stops when the surplus runs out
 * **Local Bluetooth control** of the car, free and without the internet, with automatic fallback to Tesla's own API or Teslemetry if Bluetooth is busy or fails
 * **Four modes:** Manual, Solar, Min + Solar (always at least the minimum amps) and Fast
+* **Charge limit** set from the dashboard, over Bluetooth or a backup route
 * **Dashboard** in the style of the Tesla app, with live power flows, battery level and time to your charge limit. Works on a phone too. A **System** tab shows the controller's working and recent events, and an **Energy** tab the usage graph (up to 30 days), a daily energy chart, today's totals, daily totals and a running estimate of your electricity bill for the current billing period
 * **Permanent archive** of daily totals and minute by minute data as CSV files you can download and open in Excel
 * **Sessions page** for every charge, from plugging in to unplugging: energy, solar share, energy that reached the battery, cost and money saved, with a CSV download. With TeslaTrack, charging away from home is listed too, with Superchargers marked in red. Today's charging is here as well, and with TeslaTrack, the kilometres driven, the charging cost per km and how much you saved compared with a fuel car (set its fuel use and price under [tariff])
