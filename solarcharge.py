@@ -484,6 +484,8 @@ class Weather(object):
                     "code": c.get("weather_code"), "day": c.get("is_day")},
             "today": {"min": col(d, "temperature_2m_min", 0), "max": col(d, "temperature_2m_max", 0),
                       "rain": col(d, "precipitation_probability_max", 0), "rain_mm": col(d, "precipitation_sum", 0)},
+            "tomorrow": {"min": col(d, "temperature_2m_min", 1), "max": col(d, "temperature_2m_max", 1),
+                         "rain": col(d, "precipitation_probability_max", 1), "rain_mm": col(d, "precipitation_sum", 1)},
             "hours": hours,
         }
 
@@ -492,8 +494,14 @@ class Weather(object):
             return {"ok": False, "error": self.error or "Loading"}
         hour = time.strftime("%Y-%m-%dT%H:00", time.localtime(now))
         nxt = [x for x in self.data["hours"] if x["t"] >= hour][:12]
+        # tomorrow from 5am to 8pm, the hours that matter for solar charging
+        tdate = time.strftime("%Y-%m-%d", time.localtime(now + 86400))
+        tom = [x for x in self.data["hours"] if x["t"][:10] == tdate and "05:00" <= x["t"][11:16] <= "20:00"]
+        tsum = dict(self.data.get("tomorrow") or {})
+        tsum["date"] = tdate
+        tsum["solar_kwh"] = round(sum(x["solar_kw"] or 0 for x in tom), 1) if tom else None
         return {"ok": True, "now": self.data["now"], "today": self.data["today"], "hours": nxt,
-                "updated": self.updated}
+                "tomorrow": tsum, "tomorrow_hours": tom, "updated": self.updated}
 
 
 class Forecast(object):

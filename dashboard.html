@@ -390,6 +390,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--text-3); text-align: ce
 .wxhours::-webkit-scrollbar { display: none; }
 .wxh { text-align: center; padding: 8px 2px; border-radius: 10px; }
 .wxh.now { background: var(--surface-2); }
+.wxh.best .pv { color: var(--good); font-weight: 650; }
 .wxh .t { font-size: 12px; color: var(--text-2); }
 .wxh .ic { width: 28px; height: 28px; margin: 5px auto 3px; display: block; }
 .wxh .tp { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -575,6 +576,26 @@ ul.events.tall { max-height: 640px; }
     </div>
     <div class="wxhours" id="wx-hours"></div>
     <div class="wxnote" id="wx-note"></div>
+  </section>
+
+  <section class="card wx" id="wxt" hidden>
+    <h2 id="wxt-title">Tomorrow</h2>
+    <div class="wxtop">
+      <div class="wxnow">
+        <span id="wxt-icon" class="wxbig"></span>
+        <div>
+          <div class="wxtemp" id="wxt-solar"></div>
+          <div class="wxcond" id="wxt-cond"></div>
+        </div>
+      </div>
+      <div class="wxtoday">
+        <div class="lbl">Forecast</div>
+        <div class="range2"><span class="k">Low</span><span class="lo" id="wxt-lo"></span><span class="k">High</span><span class="hi" id="wxt-hi"></span></div>
+        <div class="rain" id="wxt-rain"></div>
+      </div>
+    </div>
+    <div class="wxhours" id="wxt-hours"></div>
+    <div class="wxnote">Hourly from 5am to 8pm: temperature, chance of rain and expected solar. The best solar hours are in green.</div>
   </section>
   </div>
 
@@ -1296,7 +1317,7 @@ ul.events.tall { max-height: 640px; }
   function deg0(v) { return v === null || v === undefined ? "" : Math.round(v) + "°"; }
   function pollWeather() {
     fetch("/api/weather", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (w) {
-      if (!w.ok) { $("wx").hidden = true; return; }
+      if (!w.ok) { $("wx").hidden = true; $("wxt").hidden = true; return; }
       $("wx").hidden = false;
       var k = wxKind(w.now.code, w.now.day);
       $("wx-icon").innerHTML = k[0];
@@ -1314,9 +1335,40 @@ ul.events.tall { max-height: 640px; }
           "<div class='tp'>" + deg0(h.temp) + "</div><div class='rn'>" + (h.rain !== null ? h.rain + "%" : "") + "</div>" +
           "<div class='pv'>" + (h.solar_kw ? h.solar_kw.toFixed(1) + " kW" : "") + "</div></div>";
       }).join("");
+      showTomorrow(w);
       $("wx-note").innerHTML = "Hourly: temperature, chance of rain and expected solar. Updated " + hm(w.updated) +
         ". Weather: <a href='https://open-meteo.com/' target='_blank' rel='noopener'>Open-Meteo.com</a>";
     }).catch(function () {});
+  }
+
+  // ---- tomorrow: the daytime hours, with the day's expected solar
+  function rainText(r, mm) {
+    return (r !== null && r !== undefined ? r + "% chance of rain" : "") +
+      (mm !== null && mm !== undefined ? (mm < 1 ? ", under 1 mm" : ", " + Math.round(mm) + " mm") : "");
+  }
+  function showTomorrow(w) {
+    var t = w.tomorrow, hrs = w.tomorrow_hours || [];
+    if (!t || !hrs.length) { $("wxt").hidden = true; return; }
+    $("wxt").hidden = false;
+    $("wxt-title").textContent = "Tomorrow, " + new Date(t.date + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
+    // the day's look: the most common weather in the middle of the day
+    var mid = hrs.filter(function (h) { var hr = +h.t.slice(11, 13); return hr >= 9 && hr <= 15; }), seen = {}, top = null;
+    mid.forEach(function (h) { seen[h.code] = (seen[h.code] || 0) + 1; if (top === null || seen[h.code] > seen[top]) top = h.code; });
+    var k = wxKind(top !== null ? top : hrs[0].code, 1);
+    $("wxt-icon").innerHTML = k[0];
+    $("wxt-solar").textContent = t.solar_kwh !== null && t.solar_kwh !== undefined ? Math.round(t.solar_kwh) + " kWh" : "";
+    $("wxt-cond").textContent = (k[1] ? k[1] + " \u00b7 " : "") + "solar expected";
+    $("wxt-lo").textContent = deg0(t.min);
+    $("wxt-hi").textContent = deg0(t.max);
+    $("wxt-rain").textContent = rainText(t.rain, t.rain_mm);
+    var peak = Math.max.apply(null, hrs.map(function (h) { return h.solar_kw || 0; }));
+    $("wxt-hours").innerHTML = hrs.map(function (h) {
+      var hk = wxKind(h.code, h.day), hr = +h.t.slice(11, 13), lbl = (hr % 12 || 12) + (hr < 12 ? "am" : "pm");
+      var best = peak > 0 && h.solar_kw >= peak * 0.8;
+      return "<div class='wxh" + (best ? " best" : "") + "' title='" + hk[1] + (best ? ", among the best solar hours" : "") + "'><div class='t'>" + lbl + "</div>" + hk[0] +
+        "<div class='tp'>" + deg0(h.temp) + "</div><div class='rn'>" + (h.rain !== null ? h.rain + "%" : "") + "</div>" +
+        "<div class='pv'>" + (h.solar_kw ? h.solar_kw.toFixed(1) + " kW" : "") + "</div></div>";
+    }).join("");
   }
 
   // ---- full charge schedule
