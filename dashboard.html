@@ -965,7 +965,7 @@ ul.events.tall { max-height: 640px; }
       else { note = "Couldn't set it: " + (st.msg || "the car didn't respond"); bad = true; limitSent = null; }
     } else if (cur === null && !limitDirty) note = "The car's limit shows here once it has reported it";
     if (!limitDirty && cur !== null) el.value = cur;
-    $("limitval").textContent = limitDirty || cur !== null ? el.value + "%" : "n/a";
+    $("limitval").textContent = limitDirty ? el.value + "%" : cur !== null ? cur + "%" : "n/a";
     $("limitset").hidden = !limitDirty || limitSent !== null || +el.value === cur;
     $("limitnote").textContent = note;
     $("limitnote").classList.toggle("bad", bad);

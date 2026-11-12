@@ -2093,6 +2093,12 @@ class Controller(object):
         with self.lock:
             v = dict(self.vehicle or {})
             upd.pop("_loc", None)          # car tracking lives in TeslaTrack now
+            # just after a limit change from the dashboard, the car's data stream can still carry the
+            # old limit for a minute or two: keep the new one until the car reports it (or 5 minutes)
+            ls = self.limit_status
+            if (upd.get("limit") is not None and ls and ls["state"] == "ok" and time.time() - ls["t"] < 300
+                    and int(round(upd["limit"])) != ls["target"]):
+                upd.pop("limit")
             if upd.get("ac_in") is not None:
                 self._battery_in(upd["ac_in"], v.get("ac_in"))
             v.update(upd)
