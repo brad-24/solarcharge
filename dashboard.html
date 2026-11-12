@@ -231,30 +231,50 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 /* the Mode and Charge limit buttons share one size: --bw wide, 38px high */
 :root { --bw: 96px; }
 @media (max-width: 520px) { :root { --bw: calc((100vw - 94px) / 4); } }
-.modes, .limits { display: inline-grid; grid-template-columns: repeat(4, var(--bw)); gap: 6px; background: var(--surface-2);
+.modes { display: inline-grid; grid-template-columns: repeat(4, var(--bw)); gap: 6px; background: var(--surface-2);
   padding: 4px; border-radius: 10px; max-width: 100%; }
-.limits { grid-template-columns: repeat(3, var(--bw)); }
-.modes button, .limits button {
+.modes button {
   font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 0 2px; height: 38px;
   background: transparent; color: var(--text-2); cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-@media (max-width: 520px) { .modes button, .limits button { font-size: 13px; } }
-@media (max-width: 380px) { .modes button, .limits button { font-size: 12px; letter-spacing: -0.2px; } }
+@media (max-width: 520px) { .modes button { font-size: 13px; } }
+@media (max-width: 380px) { .modes button { font-size: 12px; letter-spacing: -0.2px; } }
 .modes button:hover { color: var(--text); }
 .modes button.on { background: var(--accent); color: var(--accent-ink); }
 .modes button:disabled { opacity: .6; cursor: wait; }
 .modehelp { font-size: 13px; color: var(--text-3); margin-top: 10px; min-height: 38px; }
 .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .side .sched { margin-bottom: 0; }
-.limitcard .lhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
-.limitcard .lhead h2 { margin: 0; }
-.limitcard .batt { font-size: 14px; color: var(--text-2); }
-.limitcard .batt b { font-size: 20px; font-weight: 650; color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
-.limits button:hover { color: var(--text); }
-.limits button.on { background: var(--accent); color: var(--accent-ink); }
-.limits button.sending { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); animation: lpulse 1s ease-in-out infinite; }
+/* Car card: everything about the charge in one place, like the Tesla app */
+.limitcard h2 { margin: 0 0 10px; }
+.cbatt { display: flex; align-items: center; gap: 10px; }
+.cbatt .bicon { width: 34px; height: 16px; border: 2px solid var(--text-3); border-radius: 4px; position: relative; padding: 2px; flex: none; }
+.cbatt .bicon::after { content: ""; position: absolute; right: -5px; top: 4px; width: 3px; height: 6px; border-radius: 0 2px 2px 0; background: var(--text-3); }
+.cbatt .bicon i { display: block; height: 100%; border-radius: 1px; background: var(--text-2); }
+.cbatt b { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.cbatt .bolt { width: 18px; height: 22px; fill: var(--good); display: none; }
+.cbatt .crange { margin-left: auto; font-size: 15px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.limitcard.charging .cbatt b { color: var(--good); }
+.limitcard.charging .cbatt .bicon i { background: var(--good); }
+.limitcard.charging .cbatt .bolt { display: block; }
+.cwhen { font-size: 15px; color: var(--text-2); margin: 8px 0 14px; }
+.cline { font-size: 15px; font-weight: 650; }
+.cline span { font-weight: 500; color: var(--text-2); }
+.cstats { font-size: 14px; color: var(--text-3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+/* the slider: green up to the battery level, the thumb is the charge limit (50 to 100%) */
+.lslider { position: relative; height: 34px; margin: 10px 11px 0; cursor: pointer; touch-action: none; outline: none; }
+.lslider .ltrack { position: absolute; left: 0; right: 0; top: 15px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.lslider .lsoc { position: absolute; left: 0; top: 0; bottom: 0; background: var(--good); width: 0; transition: width .4s; }
+.lslider .lthumb { position: absolute; top: 7px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #f2f4f7;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4); transition: left .25s; }
+.lslider.drag .lthumb { transition: none; transform: scale(1.12); }
+.lslider:focus-visible .lthumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lslider .ltip { position: absolute; top: -14px; transform: translateX(-50%); font-size: 12px; font-weight: 650; color: var(--text);
+  background: var(--surface-2); padding: 1px 6px; border-radius: 5px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+.lslider.drag .ltip, .lslider.sending .ltip { opacity: 1; }
+.lslider.sending .lthumb { animation: lpulse 1s ease-in-out infinite; }
 @keyframes lpulse { 50% { opacity: .55; } }
-.limitnote { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 4px; }
+.limitnote { font-size: 12px; color: var(--text-3); margin-top: 6px; }
 .limitnote.bad { color: var(--crit); }
 .limitnote:empty { display: none; }
 /* surplus solar available for the car: one figure, green once there's enough to start charging */
@@ -503,10 +523,21 @@ ul.events.tall { max-height: 640px; }
       </div>
     </div>
     <div class="side">
-    <div class="card limitcard">
-      <div class="lhead"><h2>Charge limit</h2><span class="batt">Battery <b id="battpct">&ndash;</b></span></div>
-      <div class="limits" id="limits" role="group" aria-label="Charge limit" aria-describedby="limitnote">
-        <button type="button" data-p="50">50%</button><button type="button" data-p="60">60%</button><button type="button" data-p="70">70%</button><button type="button" data-p="80">80%</button><button type="button" data-p="90">90%</button><button type="button" data-p="100">100%</button>
+    <div class="card limitcard" id="carcard">
+      <h2 id="carcardname">Car</h2>
+      <div class="cbatt">
+        <span class="bicon" aria-hidden="true"><i id="bfill" style="width:0"></i></span>
+        <b id="battpct">&ndash;</b>
+        <svg class="bolt" viewBox="0 0 18 22" aria-hidden="true"><path d="M11 0 L1 13 H8 L6 22 L17 8 H10 Z"/></svg>
+        <span class="crange" id="carrange"></span>
+      </div>
+      <div class="cwhen" id="carwhen">&nbsp;</div>
+      <div class="cline">Charge limit: <b id="limitpct">&ndash;</b> <span id="carstate"></span></div>
+      <div class="cstats" id="carstats">&nbsp;</div>
+      <div class="lslider" id="lslider" role="slider" tabindex="0" aria-label="Charge limit" aria-valuemin="50" aria-valuemax="100" aria-describedby="limitnote">
+        <div class="ltrack"><div class="lsoc" id="lsoc"></div></div>
+        <div class="lthumb" id="lthumb" style="left:80%"></div>
+        <div class="ltip" id="ltip" style="left:80%"></div>
       </div>
       <div class="limitnote" id="limitnote"></div>
     </div>
@@ -704,6 +735,11 @@ ul.events.tall { max-height: 640px; }
   function timeToLimit(s, veh, carW) {
     if (!veh || !veh.limit || veh.soc === undefined || veh.soc === null) return "";
     if (veh.soc >= veh.limit) return " &#183; at " + veh.limit + "% limit";
+    var e = limitEta(s, veh, carW);
+    // our own estimate reads "about", so it's clear it isn't the car's figure
+    return e.h === null ? " &#183; to " + veh.limit + "%" : " &#183; <tspan><title>" + e.src + "</title>" + (e.ours ? "about " : "") + fmtDur(e.h) + "</tspan> to " + veh.limit + "%";
+  }
+  function limitEta(s, veh, carW) {
     var h = null, src = "";
     // the car's own estimate, if it changed recently (it already reflects the current rate)
     if (veh.ttf_h !== undefined && veh.ttf_h !== null && veh.ttf_h > 0 && veh.ttf_t && Date.now() / 1000 - veh.ttf_t < 900) {
@@ -714,8 +750,7 @@ ul.events.tall { max-height: 640px; }
       h = (veh.limit - veh.soc) / 100 * (s.tesla.battery_kwh || 60) / (carW * 0.9 / 1000);
       src = "Estimated from the charging rate now (the car hasn't sent a recent estimate)";
     }
-    // our own estimate reads "about", so it's clear it isn't the car's figure
-    return h === null ? " &#183; to " + veh.limit + "%" : " &#183; <tspan><title>" + src + "</title>" + (src.charAt(0) === "E" ? "about " : "") + fmtDur(h) + "</tspan> to " + veh.limit + "%";
+    return { h: h, src: src, ours: src.charAt(0) === "E" };
   }
   function renderScene(s, inv, ch) {
     var car = ch.car_w || 0;
@@ -972,36 +1007,96 @@ ul.events.tall { max-height: 640px; }
     }).catch(function () {});
   }
 
-  // ---- charge limit: tap a button to send it straight to the car; the car's current limit is highlighted
-  var limitSent = null, limitPrevT = null;   // limitPrevT: the result showing when the button was tapped
+  // ---- Car card: battery, time to limit, charge details, and the charge limit slider
+  var limitSent = null, limitPrevT = null;   // limitPrevT: the result showing when the change was sent
+  var limitDraft = null;                     // where the thumb is while dragging
   function carLimit(s) { var v = s && s.tesla && s.tesla.vehicle; return v && v.limit ? Math.round(v.limit) : null; }
   function showLimit(s) {
+    var v = s && s.tesla && s.tesla.vehicle, ch = (s && s.charger) || {}, c = (s && s.control) || {};
     var cur = carLimit(s), st = s && s.limit_status, note = "", bad = false;
     if (st && limitSent !== null && st.target === limitSent && st.t !== limitPrevT) {
-      if (st.state === "ok") { note = "Set to " + st.target + "%"; cur = st.target; limitSent = null; }
+      if (st.state === "ok") { cur = st.target; limitSent = null; }
       else if (st.state !== "sending") { note = "Couldn't set it: " + (st.msg || "the car didn't respond"); bad = true; limitSent = null; }
-    } else if (cur === null) note = "The car's limit shows here once it has reported it";
-    var v = s && s.tesla && s.tesla.vehicle;
-    $("battpct").textContent = v && v.soc !== undefined && v.soc !== null ? Math.round(v.soc) + "%" : "\u2013";
-    if (limitSent !== null) note = "Setting " + limitSent + "%\u2026";
-    else if (!note && cur !== null && [50, 60, 70, 80, 90, 100].indexOf(cur) < 0) note = "The car's limit is " + cur + "%";
-    $("limits").querySelectorAll("button").forEach(function (b) {
-      var p = +b.dataset.p;
-      b.classList.toggle("on", limitSent === null && p === cur);
-      b.classList.toggle("sending", p === limitSent);
-      b.setAttribute("aria-pressed", p === cur ? "true" : "false");
-    });
+    } else if (cur === null) note = "The charge limit shows here once the car has reported it";
+    if (limitSent !== null) note = "Setting " + limitSent + "%…";
+    var soc = v && v.soc !== undefined && v.soc !== null ? Math.round(v.soc) : null;
+    var charging = !!(ch.ok && ch.charging);
+    if (s && s.car_name) $("carcardname").textContent = s.car_name;
+    $("carcard").classList.toggle("charging", charging);
+    $("battpct").textContent = soc !== null ? soc + "%" : "–";
+    $("bfill").style.width = (soc || 0) + "%";
+    $("carrange").textContent = v && v.range_km !== undefined && v.range_km !== null ? v.range_km + " km" : "";
+    // the line under the battery: time to the limit, or what's happening
+    var when = "", whenTitle = "";
+    if (!ch.configured) when = "Charger not set up";
+    else if (!ch.ok) when = "No charger data";
+    else if (!ch.plugged) when = v && v.home === false ? "Away from home" : "Not plugged in";
+    else if (charging && cur !== null && soc !== null && soc < cur) {
+      var e = limitEta(s, v, ch.car_w || 0);
+      when = e.h === null ? "Charging to " + cur + "%" : (e.ours ? "About " : "") + fmtDur(e.h) + " remaining to charge limit";
+      whenTitle = e.src || "";
+    } else if (cur !== null && soc !== null && soc >= cur) when = "Charged to the limit";
+    else when = "Plugged in, waiting for solar";
+    $("carwhen").textContent = when;
+    $("carwhen").title = whenTitle;
+    $("limitpct").textContent = cur !== null ? cur + "%" : "–";
+    $("carstate").textContent = !ch.ok || !ch.plugged ? "" : charging ? "· Charging" : soc !== null && cur !== null && soc >= cur ? "· Complete" : "· Paused";
+    // the details: power, energy added this session, amps actual/set, voltage
+    var bits = [];
+    if (charging) bits.push(((ch.car_w || 0) / 1000).toFixed(1) + " kW");
+    if (ch.plugged && ch.session_kwh) bits.push("+" + ch.session_kwh.toFixed(1) + " kWh");
+    if (charging) bits.push(Math.round(ch.amps || 0) + "/" + (c.amps || c.max_amps || "?") + " A");
+    if (charging && ch.volts) bits.push(Math.round(ch.volts) + " V");
+    $("carstats").innerHTML = bits.length ? bits.join(" &#183; ") : "&nbsp;";
+    // the slider
+    var shown = limitDraft !== null ? limitDraft : limitSent !== null ? limitSent : cur !== null ? cur : 80;
+    $("lsoc").style.width = (soc || 0) + "%";
+    $("lthumb").style.left = shown + "%";
+    $("ltip").style.left = shown + "%";
+    $("ltip").textContent = shown + "%";
+    $("lslider").setAttribute("aria-valuenow", shown);
+    $("lslider").setAttribute("aria-valuetext", shown + "% charge limit" + (soc !== null ? ", battery at " + soc + "%" : ""));
+    $("lslider").classList.toggle("sending", limitSent !== null);
     $("limitnote").textContent = note;
     $("limitnote").classList.toggle("bad", bad);
   }
-  $("limits").addEventListener("click", function (e) {
-    var b = e.target.closest("button"); if (!b || limitSent !== null) return;
-    var p = +b.dataset.p; if (p === carLimit(state)) return;
+  function sendLimit(p) {
+    if (p === null || limitSent !== null || p === carLimit(state)) { showLimit(state); return; }
     limitSent = p; limitPrevT = state && state.limit_status ? state.limit_status.t : null; showLimit(state);
     fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ percent: p }) })
       .then(function (r) { if (!r.ok) throw new Error("rejected"); [1000, 4000, 10000, 30000].forEach(function (ms) { setTimeout(poll, ms); }); })
       .catch(function () { limitSent = null; showLimit(state); $("limitnote").textContent = "Couldn't reach the Pi to change the limit."; $("limitnote").classList.add("bad"); });
-  });
+  }
+  (function () {
+    var sl = $("lslider"), keyTimer = null;
+    function pct(ev) {
+      var r = sl.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * 100;
+      return Math.max(50, Math.min(100, Math.round(x / 5) * 5));   // 50 to 100% in 5% steps
+    }
+    sl.addEventListener("pointerdown", function (ev) {
+      if (limitSent !== null) return;
+      sl.setPointerCapture(ev.pointerId); sl.classList.add("drag");
+      limitDraft = pct(ev); showLimit(state);
+    });
+    sl.addEventListener("pointermove", function (ev) {
+      if (limitDraft === null || !sl.classList.contains("drag")) return;
+      var p = pct(ev); if (p !== limitDraft) { limitDraft = p; showLimit(state); }
+    });
+    function end() {
+      if (limitDraft === null) return;
+      var p = limitDraft; limitDraft = null; sl.classList.remove("drag"); sendLimit(p);
+    }
+    sl.addEventListener("pointerup", end);
+    sl.addEventListener("pointercancel", function () { limitDraft = null; sl.classList.remove("drag"); showLimit(state); });
+    sl.addEventListener("keydown", function (ev) {
+      var d = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 }[ev.key];
+      if (!d || limitSent !== null) return;
+      ev.preventDefault();
+      var base = limitDraft !== null ? limitDraft : (carLimit(state) || 80);
+      limitDraft = Math.max(50, Math.min(100, Math.round((base + d) / 5) * 5)); sl.classList.add("drag"); showLimit(state);
+      clearTimeout(keyTimer); keyTimer = setTimeout(end, 900);   // send once the keys settle
+    });
+  })();
 
   function showMode(mode) {
     var btns = $("modes").querySelectorAll("button");
