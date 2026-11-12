@@ -2103,6 +2103,10 @@ class Controller(object):
                 upd.pop("limit")
             if upd.get("ac_in") is not None:
                 self._battery_in(upd["ac_in"], v.get("ac_in"))
+            # the car's time to limit arrives with every reading, even when it hasn't been updated for hours:
+            # note when it last changed so the dashboard only trusts a recent one
+            if upd.get("ttf_h") is not None and upd["ttf_h"] != v.get("ttf_h"):
+                v["ttf_t"] = time.time()
             v.update(upd)
             v["t"] = time.time()
             self.vehicle = v

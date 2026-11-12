@@ -700,12 +700,18 @@ ul.events.tall { max-height: 640px; }
   function timeToLimit(s, veh, carW) {
     if (!veh || !veh.limit || veh.soc === undefined || veh.soc === null) return "";
     if (veh.soc >= veh.limit) return " &#183; at " + veh.limit + "% limit";
-    var h = null;
-    // the car's own estimate, if it is fresh (it already reflects the current rate)
-    if (veh.ttf_h !== undefined && veh.ttf_h !== null && veh.ttf_h > 0 && Date.now() / 1000 - veh.t < 900) h = veh.ttf_h;
+    var h = null, src = "";
+    // the car's own estimate, if it changed recently (it already reflects the current rate)
+    if (veh.ttf_h !== undefined && veh.ttf_h !== null && veh.ttf_h > 0 && veh.ttf_t && Date.now() / 1000 - veh.ttf_t < 900) {
+      h = veh.ttf_h; src = "The car's own estimate";
+    }
     // otherwise estimate from the charging rate now, allowing about 10% charging losses
-    if (h === null && carW > 300) h = (veh.limit - veh.soc) / 100 * (s.tesla.battery_kwh || 60) / (carW * 0.9 / 1000);
-    return h === null ? " &#183; to " + veh.limit + "%" : " &#183; " + fmtDur(h) + " to " + veh.limit + "%";
+    if (h === null && carW > 300) {
+      h = (veh.limit - veh.soc) / 100 * (s.tesla.battery_kwh || 60) / (carW * 0.9 / 1000);
+      src = "Estimated from the charging rate now (the car hasn't sent a recent estimate)";
+    }
+    // our own estimate reads "about", so it's clear it isn't the car's figure
+    return h === null ? " &#183; to " + veh.limit + "%" : " &#183; <tspan><title>" + src + "</title>" + (src.charAt(0) === "E" ? "about " : "") + fmtDur(h) + "</tspan> to " + veh.limit + "%";
   }
   function renderScene(s, inv, ch) {
     var car = ch.car_w || 0;
