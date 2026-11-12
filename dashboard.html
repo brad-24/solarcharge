@@ -248,11 +248,24 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .limitset:disabled { background: var(--surface-2); color: var(--text-3); cursor: default; }
 .limitnote { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 2px; }
 .limitnote.bad { color: var(--crit); }
-.meter { margin-top: 14px; }
-.meter .bar { position: relative; height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
-.meter .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--s-car); border-radius: 5px; transition: width .6s; }
-.meter .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-2); }
-.meter .legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); margin-top: 6px; }
+/* Mode card: a small vertical gauge of the solar available for the car sits in the top right corner,
+   beside the heading and status; the buttons and charge limit keep the full width */
+.modecard { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px;
+  grid-template-areas: "title gauge" "reason gauge" "modes modes" "help help" "limit limit" "note note"; }
+.modebody { display: contents; }
+.modecard h2 { grid-area: title; }
+.modecard #reason { grid-area: reason; align-self: start; }
+.modecard #modes { grid-area: modes; }
+.modecard #modehelp { grid-area: help; }
+.modecard .limitrow { grid-area: limit; }
+.modecard #limitnote { grid-area: note; }
+.vmeter { grid-area: gauge; display: flex; align-items: stretch; gap: 10px; cursor: default; }
+.vtext { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding: 2px 0; }
+.vval { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vbar { position: relative; width: 10px; min-height: 64px; background: var(--surface-2); border-radius: 5px; }
+.vfill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--s-car); border-radius: 5px; transition: height .6s; }
+.vmark { position: absolute; left: -4px; right: -4px; height: 2px; border-radius: 1px; background: var(--text-2); }
+.vlbl { font-size: 11px; line-height: 1.25; color: var(--text-3); text-align: right; }
 
 dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 16px; margin: 0; font-size: 14px; }
 dl.kv dt { color: var(--text-2); }
@@ -476,7 +489,8 @@ ul.events.tall { max-height: 640px; }
 </svg>
   </section>
   <section class="grid main">
-    <div class="card">
+    <div class="card modecard">
+      <div class="modebody">
       <h2>Mode</h2>
       <div class="reason" id="reason">Loading</div>
       <div class="modes" id="modes">
@@ -493,9 +507,10 @@ ul.events.tall { max-height: 640px; }
         <button type="button" class="limitset" id="limitset" disabled>Set</button>
       </div>
       <div class="limitnote" id="limitnote"></div>
-      <div class="meter">
-        <div class="bar"><div class="fill" id="meterfill" style="width:0"></div><div class="mark" id="metermark"></div></div>
-        <div class="legend"><span id="meterleft">Available for the car</span><span id="meterright"></span></div>
+      </div>
+      <div class="vmeter" id="vmeter" role="img" aria-label="Solar available for the car">
+        <div class="vtext"><div class="vval" id="meterval">&nbsp;</div><div class="vlbl">solar for<br>the car</div></div>
+        <div class="vbar"><div class="vfill" id="meterfill" style="height:0"></div><div class="vmark" id="metermark"></div></div>
       </div>
     </div>
     <section class="card sched" id="sched" hidden>
@@ -752,10 +767,11 @@ ul.events.tall { max-height: 640px; }
 
     var maxW = c.max_amps * ch.volts;
     var avail = Math.max(0, c.avg_avail);
-    $("meterfill").style.width = Math.min(100, 100 * avail / maxW) + "%";
-    $("metermark").style.left = Math.min(100, 100 * c.start_w / maxW) + "%";
-    setText("meterleft", "Available for the car: " + kwPlain(avail));
-    setText("meterright", "Start at " + kwPlain(c.start_w) + " &middot; max " + kwPlain(maxW));
+    $("meterfill").style.height = Math.max(0, Math.min(100, 100 * avail / maxW)) + "%";
+    $("metermark").style.bottom = "calc(" + Math.min(100, 100 * c.start_w / maxW) + "% - 1px)";
+    setText("meterval", kwPlain(avail));
+    $("vmeter").title = "Solar available for the car: " + kwPlain(avail).replace("&nbsp;", " ") + ". Charging starts at " +
+      kwPlain(c.start_w).replace("&nbsp;", " ") + " (the tick), up to " + kwPlain(maxW).replace("&nbsp;", " ") + " at full amps.";
 
     setText("k-on", c.on ? "Charging at " + c.amps + " A" + (s.dry_run ? " <span class='muted'>(virtual)</span>" : "") : "Not charging");
     setText("k-avail", (c.avg_avail < 0 ? "&minus;" : "") + kwPlain(c.avg_avail));
