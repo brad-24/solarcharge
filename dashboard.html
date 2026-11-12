@@ -228,12 +228,18 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .main { grid-template-columns: 1.25fr 1fr; margin-bottom: 14px; }
 @media (max-width: 760px) { .main { grid-template-columns: 1fr; } }
 .reason { font-size: 18px; font-weight: 550; line-height: 1.35; margin: 2px 0 14px; min-height: 48px; }
-.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--surface-2);
-  padding: 4px; border-radius: 10px; }
-.modes button {
-  font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 8px 4px;
-  background: transparent; color: var(--text-2); cursor: pointer;
+/* the Mode and Charge limit buttons share one size: --bw wide, 38px high */
+:root { --bw: 96px; }
+@media (max-width: 520px) { :root { --bw: calc((100vw - 94px) / 4); } }
+.modes, .limits { display: inline-grid; grid-template-columns: repeat(4, var(--bw)); gap: 6px; background: var(--surface-2);
+  padding: 4px; border-radius: 10px; max-width: 100%; }
+.limits { grid-template-columns: repeat(3, var(--bw)); }
+.modes button, .limits button {
+  font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 0 2px; height: 38px;
+  background: transparent; color: var(--text-2); cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+@media (max-width: 520px) { .modes button, .limits button { font-size: 13px; } }
+@media (max-width: 380px) { .modes button, .limits button { font-size: 12px; letter-spacing: -0.2px; } }
 .modes button:hover { color: var(--text); }
 .modes button.on { background: var(--accent); color: var(--accent-ink); }
 .modes button:disabled { opacity: .6; cursor: wait; }
@@ -242,10 +248,8 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .side .sched { margin-bottom: 0; }
 .limitcard .lhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
 .limitcard .lhead h2 { margin: 0; }
-.limitcard .lhead b { font-size: 13px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.limits { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; background: var(--surface-2); padding: 4px; border-radius: 10px; }
-.limits button { font: inherit; font-size: 14px; font-weight: 550; border: 0; border-radius: 7px; padding: 8px 2px;
-  background: transparent; color: var(--text-2); cursor: pointer; font-variant-numeric: tabular-nums; }
+.limitcard .batt { font-size: 14px; color: var(--text-2); }
+.limitcard .batt b { font-size: 20px; font-weight: 650; color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .limits button:hover { color: var(--text); }
 .limits button.on { background: var(--accent); color: var(--accent-ink); }
 .limits button.sending { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); animation: lpulse 1s ease-in-out infinite; }
@@ -500,7 +504,7 @@ ul.events.tall { max-height: 640px; }
     </div>
     <div class="side">
     <div class="card limitcard">
-      <div class="lhead"><h2>Charge limit</h2><b id="limitval"></b></div>
+      <div class="lhead"><h2>Charge limit</h2><span class="batt">Battery <b id="battpct">&ndash;</b></span></div>
       <div class="limits" id="limits" role="group" aria-label="Charge limit" aria-describedby="limitnote">
         <button type="button" data-p="50">50%</button><button type="button" data-p="60">60%</button><button type="button" data-p="70">70%</button><button type="button" data-p="80">80%</button><button type="button" data-p="90">90%</button><button type="button" data-p="100">100%</button>
       </div>
@@ -977,7 +981,10 @@ ul.events.tall { max-height: 640px; }
       if (st.state === "ok") { note = "Set to " + st.target + "%"; cur = st.target; limitSent = null; }
       else if (st.state !== "sending") { note = "Couldn't set it: " + (st.msg || "the car didn't respond"); bad = true; limitSent = null; }
     } else if (cur === null) note = "The car's limit shows here once it has reported it";
-    $("limitval").textContent = limitSent !== null ? "Setting " + limitSent + "%\u2026" : cur !== null && [50, 60, 70, 80, 90, 100].indexOf(cur) < 0 ? "Car: " + cur + "%" : "";
+    var v = s && s.tesla && s.tesla.vehicle;
+    $("battpct").textContent = v && v.soc !== undefined && v.soc !== null ? Math.round(v.soc) + "%" : "\u2013";
+    if (limitSent !== null) note = "Setting " + limitSent + "%\u2026";
+    else if (!note && cur !== null && [50, 60, 70, 80, 90, 100].indexOf(cur) < 0) note = "The car's limit is " + cur + "%";
     $("limits").querySelectorAll("button").forEach(function (b) {
       var p = +b.dataset.p;
       b.classList.toggle("on", limitSent === null && p === cur);
