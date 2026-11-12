@@ -253,18 +253,12 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .limitnote { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 4px; }
 .limitnote.bad { color: var(--crit); }
 .limitnote:empty { display: none; }
-/* solar available for the car: a small dial under the charge limit; the green band is where there's enough to charge */
-.dial { display: flex; flex-direction: column; align-items: center; margin-top: 10px; cursor: default; }
-.dial svg { width: 170px; height: auto; display: block; overflow: visible; }
-.dial .track { stroke: var(--surface-2); }
-.dial .band { stroke: var(--good); opacity: .35; }
-.dial .fill { stroke: var(--good); transition: stroke-dasharray .6s; }
-.dial .fill.low { stroke: var(--text-3); }
-.dial .needle { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
-.dial .hub { fill: var(--text); }
-.dial .ends { font-size: 8px; fill: var(--text-3); }
-.dval { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: -2px; }
-.dlbl { font-size: 12px; color: var(--text-3); }
+/* surplus solar available for the car: one figure, green once there's enough to start charging */
+.avail { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid var(--border); cursor: default; }
+.avail span { font-size: 14px; color: var(--text-2); }
+.avail b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.avail b.enough { color: var(--good); }
 
 dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 16px; margin: 0; font-size: 14px; }
 dl.kv dt { color: var(--text-2); }
@@ -499,18 +493,8 @@ ul.events.tall { max-height: 640px; }
         <button type="button" data-mode="fast">Fast</button>
       </div>
       <div class="modehelp" id="modehelp"></div>
-      <div class="dial" id="dial" role="img" aria-label="Solar available for the car">
-        <svg viewBox="0 0 120 70" aria-hidden="true">
-          <path class="track" d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke-width="10" stroke-linecap="round"/>
-          <path class="band" id="dialband" d="" fill="none" stroke-width="10"/>
-          <path class="fill" id="dialfill" d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke-width="4" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
-          <line class="needle" id="dialneedle" x1="60" y1="60" x2="60" y2="22" transform="rotate(-90 60 60)"/>
-          <circle class="hub" cx="60" cy="60" r="3.5"/>
-          <text class="ends" x="10" y="71" text-anchor="middle">0</text>
-          <text class="ends" id="dialmax" x="110" y="71" text-anchor="middle"></text>
-        </svg>
-        <div class="dval" id="meterval">&nbsp;</div>
-        <div class="dlbl">solar available for the car</div>
+      <div class="avail" id="dial">
+        <span>Surplus solar available for the car</span><b id="meterval">&nbsp;</b>
       </div>
       </div>
     </div>
@@ -777,16 +761,10 @@ ul.events.tall { max-height: 640px; }
 
     var maxW = c.max_amps * ch.volts;
     var avail = Math.max(0, c.avg_avail);
-    var f = Math.max(0, Math.min(1, avail / maxW)), fs = Math.max(0, Math.min(1, c.start_w / maxW));
-    function pt(x) { var a = Math.PI * (1 - x); return (60 + 50 * Math.cos(a)).toFixed(2) + " " + (60 - 50 * Math.sin(a)).toFixed(2); }
-    $("dialband").setAttribute("d", "M" + pt(fs) + " A50 50 0 0 1 110 60");
-    $("dialfill").setAttribute("stroke-dasharray", (f * 100).toFixed(1) + " 100");
-    $("dialfill").classList.toggle("low", avail < c.start_w);
-    $("dialneedle").setAttribute("transform", "rotate(" + (f * 180 - 90).toFixed(1) + " 60 60)");
-    $("dialmax").textContent = (maxW / 1000).toFixed(1) + " kW";
+    $("meterval").classList.toggle("enough", avail >= c.start_w);
     setText("meterval", kwPlain(avail));
-    $("dial").title = "Solar available for the car: " + kwPlain(avail).replace("&nbsp;", " ") + ". The green band starts at " +
-      kwPlain(c.start_w).replace("&nbsp;", " ") + ", enough to start charging, up to " + kwPlain(maxW).replace("&nbsp;", " ") + " at full amps.";
+    $("dial").title = "Solar available for the car: " + kwPlain(avail).replace("&nbsp;", " ") + ". Charging can start at " +
+      kwPlain(c.start_w).replace("&nbsp;", " ") + " (shown in green), up to " + kwPlain(maxW).replace("&nbsp;", " ") + " at full amps.";
 
     setText("k-on", c.on ? "Charging at " + c.amps + " A" + (s.dry_run ? " <span class='muted'>(virtual)</span>" : "") : "Not charging");
     setText("k-avail", (c.avg_avail < 0 ? "&minus;" : "") + kwPlain(c.avg_avail));
