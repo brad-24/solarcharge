@@ -651,6 +651,8 @@ ul.events.tall { max-height: 640px; }
         <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
         <span><span class="swatch" style="background:var(--s-house)"></span>House</span>
         <span><span class="swatch" style="background:var(--s-car)"></span>Car</span>
+        <span><span class="swatch" style="background:var(--e-grid)"></span>Grid</span>
+        <span><span class="swatch" style="background:var(--e-export)"></span>Export</span>
       </div>
       <div class="range" id="range">
         <button type="button" data-min="180">3 h</button>
@@ -670,8 +672,8 @@ ul.events.tall { max-height: 640px; }
       <h2>Meter</h2>
       <div class="legendrow">
         <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
-        <span><span class="swatch" style="background:var(--e-export)"></span>Exported</span>
-        <span><span class="swatch" style="background:var(--e-grid)"></span>From grid</span>
+        <span><span class="swatch" style="background:var(--e-export)"></span>Export</span>
+        <span><span class="swatch" style="background:var(--e-grid)"></span>Grid</span>
       </div>
       <div class="range" id="erange">
         <button type="button" data-d="bill" class="on">This bill</button>
@@ -893,8 +895,8 @@ ul.events.tall { max-height: 640px; }
   var eRange = "bill", daysData = null, lastBill = null;
   var ESER = [
     { key: "pv_wh", name: "Solar", color: "--s-solar" },
-    { key: "export_wh", name: "Exported", color: "--e-export" },
-    { key: "import_wh", name: "From grid", color: "--e-grid" }
+    { key: "export_wh", name: "Export", color: "--e-export" },
+    { key: "import_wh", name: "Grid", color: "--e-grid" }
   ];
   function isoDay(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function drawEnergy() {
@@ -1167,7 +1169,9 @@ ul.events.tall { max-height: 640px; }
   var SERIES = [
     { key: 1, name: "Solar", color: "--s-solar", area: true },
     { key: 2, name: "House", color: "--s-house" },
-    { key: 3, name: "Car", color: "--s-car" }
+    { key: 3, name: "Car", color: "--s-car" },
+    { key: 4, name: "Grid", color: "--e-grid" },
+    { key: 5, name: "Export", color: "--e-export" }
   ];
   function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
   function niceMax(v) {
@@ -1186,7 +1190,11 @@ ul.events.tall { max-height: 640px; }
     var now = state ? state.time : Date.now() / 1000;
     var from = now - rangeMin * 60;
     var src = isLong() ? (longHist[rangeMin] ? longHist[rangeMin].rows : null) : history;
-    var pts = (src || []).filter(function (p) { return p[0] >= from; });
+    // rows hold the grid as one signed figure (+ from the grid, - exported): split it into Grid and Export
+    var pts = (src || []).filter(function (p) { return p[0] >= from; }).map(function (p) {
+      var g = p[4] || 0;
+      return [p[0], p[1], p[2], p[3], Math.max(0, g), Math.max(0, -g)];
+    });
     if (pts.length < 2) {
       var e = document.createElement("div"); e.className = "empty";
       e.textContent = src === null ? "Loading" : "The chart fills in as minutes of data are collected";
@@ -1195,7 +1203,7 @@ ul.events.tall { max-height: 640px; }
     var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 44, mt = 10, mb = 26;
     var iw = W - ml - mr, ih = H - mt - mb;
     var ymax = 0;
-    pts.forEach(function (p) { ymax = Math.max(ymax, p[1], p[2], p[3]); });
+    pts.forEach(function (p) { ymax = Math.max(ymax, p[1], p[2], p[3], p[4], p[5]); });
     ymax = niceMax(ymax);
     var x = function (t) { return ml + (t - from) / (now - from) * iw; };
     var y = function (v) { return mt + ih - Math.max(0, v) / ymax * ih; };
@@ -1203,7 +1211,7 @@ ul.events.tall { max-height: 640px; }
     var svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "Solar, house and car power over the last " + (rangeMin / 60) + " hours");
+    svg.setAttribute("aria-label", "Solar, house, car, grid and export power over the last " + (rangeMin / 60) + " hours");
     var html = "<g class='axis'>";
     for (var i = 0; i <= 4; i++) {
       var v = ymax * i / 4, yy = y(v);
@@ -1251,6 +1259,9 @@ ul.events.tall { max-height: 640px; }
     var last = pts[pts.length - 1], labels = SERIES.map(function (s) { return { s: s, y: y(last[s.key]) }; });
     labels.sort(function (a, b) { return a.y - b.y; });
     for (var j = 1; j < labels.length; j++) if (labels[j].y - labels[j - 1].y < 13) labels[j].y = labels[j - 1].y + 13;
+    // keep the stack inside the chart: if it runs off the bottom, push it back up
+    var lim = mt + ih;
+    for (var j2 = labels.length - 1; j2 >= 0; j2--) { if (labels[j2].y > lim) labels[j2].y = lim; lim = labels[j2].y - 13; }
     labels.forEach(function (l) {
       html += "<text class='dlabel' x='" + (W - mr + 6) + "' y='" + (l.y + 4) + "'>" + l.s.name + "</text>";
     });
@@ -1275,7 +1286,7 @@ ul.events.tall { max-height: 640px; }
       });
       tip.innerHTML = "<div class='t'>" + when(p[0], span > 86400) + (isLong() ? " <span class='muted'>(average)</span>" : "") + "</div>" + SERIES.map(function (s) {
         return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + kwPlain(p[s.key]) + "</b></div>";
-      }).join("") + "<div class='r'><span class='swatch' style='background:var(--text-3)'></span>Grid<b>" + (p[4] < 0 ? "export " : "import ") + kwPlain(p[4]) + "</b></div>";
+      }).join("");
       tip.style.display = "block";
       var tx = px + 14; if (tx + tip.offsetWidth > W) tx = px - tip.offsetWidth - 14;
       tip.style.left = tx + "px"; tip.style.top = (mt + 4) + "px";
