@@ -1521,8 +1521,7 @@ class Controller(object):
             ok, err = False, "dry run" if self.s.dry_run else "no route to the car is set up"
         else:
             ok, err = self.tesla.command("set_charge_limit", {"percent": p})
-        path = getattr(self.tesla, "last_path", "")
-        via = {"teslemetry": " via Teslemetry", "fleet": " via Tesla API"}.get(path, "") if ok else ""
+        via = self._via() if ok else ""
         with self.lock:
             if ok:
                 self.vehicle = dict(self.vehicle or {}, limit=p)
@@ -1712,6 +1711,15 @@ class Controller(object):
         self.today[key] += 1
         if self.session is not None:
             self.session[key] = self.session.get(key, 0) + 1
+
+    def _via(self):
+        """Which route the last command took, for the event log: ' via Bluetooth', ' via Tesla API' or ' via Teslemetry'."""
+        if self.simulated or self.dry_run:
+            return ""
+        path = getattr(self.tesla, "last_path", None)
+        if path is None:   # a single route, not the Bluetooth / Tesla API / Teslemetry chain
+            path = "bluetooth" if isinstance(self.tesla, BleTesla) else "teslemetry" if isinstance(self.tesla, Teslemetry) else ""
+        return {"bluetooth": " via Bluetooth", "fleet": " via Tesla API", "teslemetry": " via Teslemetry"}.get(path, "")
 
     def _send(self, now, name, body=None):
         if now < self.cmd_block_until:
@@ -1968,7 +1976,7 @@ class Controller(object):
             failed_for = now - (self.inv_fail_since or now)
             if self.on and failed_for >= s.read_fail_stop:
                 if self._send(now, "charge_stop"):
-                    self.event("Stop charging: no inverter readings for %s" % fmt_secs(failed_for))
+                    self.event("Stop charging: no inverter readings for %s%s" % (fmt_secs(failed_for), self._via()))
                     self.on = False
                     self.off_since = now
                     self._count("stops")
@@ -2041,7 +2049,7 @@ class Controller(object):
                 self.above_since = None
                 self.not_charging_since = None
                 self._count("starts")
-                self.event("Start charging at %d A (%d W available)" % (want_amps, avg))
+                self.event("Start charging at %d A (%d W available)%s" % (want_amps, avg, self._via()))
                 self.reason = "Charging at %d A" % want_amps
             return
 
@@ -2052,7 +2060,7 @@ class Controller(object):
                 self.below_since = None
                 self._count("stops")
                 self.self_started = False
-                self.event("Stop charging (%d W available)" % avg)
+                self.event("Stop charging (%d W available)%s" % (avg, self._via()))
                 self.reason = "Stopped, waiting for surplus"
             return
 
@@ -2085,8 +2093,7 @@ class Controller(object):
                     new = want_amps
             if new is not None and self._send(now, "set_charging_amps", {"charging_amps": new}):
                 paid = getattr(self.tesla, "last_path", "teslemetry") == "teslemetry" and not self.simulated
-                self.event("Set amps %d to %d (%d W available)%s" % (self.amps, new, avg, " via Teslemetry" if paid else (
-                    " via Tesla API" if getattr(self.tesla, "last_path", "") == "fleet" else "")))
+                self.event("Set amps %d to %d (%d W available)%s" % (self.amps, new, avg, self._via()))
                 if new > self.amps:
                     self.raises.append(now)
                     if paid:
