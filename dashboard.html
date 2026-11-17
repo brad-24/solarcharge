@@ -23,10 +23,10 @@
   --grid: #e6e4de;
   --s-house: #2a78d6;
   --s-solar: #eb6834;
-  --s-car: #1baf7a;
+  --s-car: #3a3d44;
   --s-cabin: #7a4fd4;
-  --e-export: #c99a06;
-  --e-grid: #7a4fd4;
+  --e-export: #1a9e5c;
+  --e-grid: #d23b3b;
   --wx-lo: #2f8fbf;
   --wx-hi: #c97a12;
   --wx-rain: #2a7fc9;
@@ -53,10 +53,10 @@
     --grid: #2a2a27;
     --s-house: #3987e5;
     --s-solar: #d95926;
-    --s-car: #199e70;
+    --s-car: #eef1f5;
     --s-cabin: #a17ff0;
-    --e-export: #e8c547;
-    --e-grid: #a17ff0;
+    --e-export: #3ad38a;
+    --e-grid: #f05a5a;
     --wx-lo: #9fd4ec;
     --wx-hi: #f0b45a;
     --wx-rain: #7dbcf0;
@@ -82,10 +82,10 @@
   --grid: #2a2a27;
   --s-house: #3987e5;
   --s-solar: #d95926;
-  --s-car: #199e70;
+  --s-car: #eef1f5;
   --s-cabin: #a17ff0;
-  --e-export: #e8c547;
-  --e-grid: #a17ff0;
+  --e-export: #3ad38a;
+  --e-grid: #f05a5a;
   --wx-lo: #9fd4ec;
   --wx-hi: #f0b45a;
   --wx-rain: #7dbcf0;
@@ -146,7 +146,7 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .scene .flow.idle { opacity: 0; animation: none; }
 .scene .flow.rev { animation-direction: reverse; }
 @keyframes sceneflow { to { stroke-dashoffset: -64; } }
-.scene .cable { fill: none; stroke: #3ad38a; stroke-width: 4; stroke-linecap: round; opacity: 0; transition: opacity .6s; }
+.scene .cable { fill: none; stroke: #f2f5fa; stroke-width: 4; stroke-linecap: round; opacity: 0; transition: opacity .6s; }
 .scene .cable.on { opacity: .9; }
 @media (max-width: 600px) {
   .scene svg { -webkit-mask-image: none; mask-image: none; }
@@ -489,8 +489,8 @@ ul.events.tall { max-height: 640px; }
 <image href="/img/scene.jpg" x="0" y="0" width="1144" height="1190"/>
 <path id="f-solar" class="flow idle" d="M558 666 L568 674 L578 688 L580 702 L580 773" style="stroke:#ffb347" filter="url(#glow)"/>
 <path id="f-house" class="flow idle" d="M594 806 L703 782" style="stroke:#5aa2ff" filter="url(#glow)"/>
-<path id="f-grid" class="flow idle" d="M580 828 L580 862 L592 874 L612 880 L712 906 L1000 993 L1150 1038" style="stroke:#f2f5fa" filter="url(#glow)"/>
-<path id="f-car" class="flow idle" d="M566 810 L463 834 L461 715 L418 706 L186 645 L186 676" style="stroke:#3ad38a" filter="url(#glow)"/>
+<path id="f-grid" class="flow idle" d="M580 828 L580 862 L592 874 L612 880 L712 906 L1000 993 L1150 1038" style="stroke:#ff5a5a" filter="url(#glow)"/>
+<path id="f-car" class="flow idle" d="M566 810 L463 834 L461 715 L418 706 L186 645 L186 676" style="stroke:#f2f5fa" filter="url(#glow)"/>
 <path id="cable" class="cable" d="M187 733 L186 768 L191 793 L205 793 L222 772" filter="url(#glow)"/>
 <line class="lead" x1="250" y1="40" x2="250" y2="780"/>
 <circle class="dot" cx="250" cy="780" r="5"/>
@@ -795,6 +795,8 @@ ul.events.tall { max-height: 640px; }
     flow("f-house", inv.ok ? inv.house : 0);
     flow("f-car", car);
     flow("f-grid", inv.ok ? inv.grid : 0, inv.ok && inv.grid > 0);
+    // red while drawing from the grid, green while exporting
+    $("f-grid").style.stroke = inv.ok && inv.grid > 0 ? "#ff5a5a" : "#3ad38a";
     $("cable").classList.toggle("on", !!ch.charging);
   }
 
