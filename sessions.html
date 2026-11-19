@@ -184,7 +184,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Effective cost</div><div class="value" id="t-ecost">&nbsp;</div><div class="sub" id="t-ecostsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label" id="t-fuellbl">Compared with fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label" id="t-fuellbl">Same km in fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
   </section>
 
   <section class="card" style="margin-bottom:14px">
@@ -322,7 +322,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
   function renderFuel(cost, total) {
     tripRate = null;
     var dist = data.distance, f = data.fuel || {};
-    $("t-fuellbl").textContent = "Compared with " + (f.name || "fuel");
+    $("t-fuellbl").textContent = "Same km in " + (f.name || "fuel");
     var na = function (why) {
       $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
@@ -379,9 +379,10 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     } else { $("t-ecost").innerHTML = na2; $("t-ecostsub").textContent = "needs trips and charging"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
     var fuel = km * f.l_per_100km / 100 * f.price;
-    $("t-fuel").innerHTML = money(Math.max(0, fuel - cost)) + "<small>saved</small>";
-    $("t-fuelsub").textContent = money(fuel) + " of " + (f.name || "fuel") + " (" + Math.round(km * f.l_per_100km / 100) + " L at " +
-      f.l_per_100km + " L/100 km, $" + f.price.toFixed(2) + "/L)";
+    // what the same distance would have cost in fuel, with the saving underneath
+    $("t-fuel").innerHTML = money(fuel);
+    $("t-fuelsub").textContent = Math.round(km * f.l_per_100km / 100) + " L at " + f.l_per_100km + " L/100 km and $" + f.price.toFixed(2) + "/L, " +
+      money(Math.max(0, fuel - cost)).replace(/<[^>]*>/g, "") + " saved";
   }
 
   var tripRate = null;   // average price per kWh for the period, set by renderFuel, used for each trip's cost
