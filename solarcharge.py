@@ -1619,15 +1619,20 @@ class Controller(object):
             d[self.today_key] = dict(self.today)
         return d
 
-    def get_bill(self, now=None):
+    def get_bill(self, now=None, prev=False):
         """Running cost of the current electricity bill, from the meter's daily import and export.
-        The period starts on bill_day each month and runs to the day before the next one."""
+        The period starts on bill_day each month and runs to the day before the next one.
+        With prev, the whole of the bill before it."""
         now = now or self.clock()
         today = datetime.fromtimestamp(now).date()
         bd = self.s.bill_day
         start = today.replace(day=bd) if today.day >= bd else \
             (today.replace(day=1) - timedelta(days=1)).replace(day=bd)
         nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=bd)
+        if prev:
+            nxt = start
+            start = (start.replace(day=1) - timedelta(days=1)).replace(day=bd)
+            today = nxt - timedelta(days=1)
         total_days = (nxt - start).days
         elapsed = (today - start).days + 1
         days = self.get_days()
@@ -1651,7 +1656,7 @@ class Controller(object):
         supply = elapsed * s.supply_price
         total = usage + supply - credit
         # projection from the days with data, today counted by how much of it has passed
-        frac = (now - time.mktime(today.timetuple())) / 86400.0
+        frac = 1.0 if prev else (now - time.mktime(today.timetuple())) / 86400.0
         span = max(0.25, len(have) - 1 + frac) if have else 0
         per_day = (usage - credit) / span if span else 0.0
         projected = per_day * total_days + total_days * s.supply_price
@@ -1662,7 +1667,8 @@ class Controller(object):
             "first_data": min(have).isoformat() if have else None,
             "import_kwh": round(imp_kwh, 2), "export_kwh": round(exp_kwh, 2),
             "usage": round(usage, 2), "supply": round(supply, 2), "credit": round(credit, 2),
-            "total": round(total, 2), "projected": round(projected, 2) if have else None,
+            "total": round(total, 2), "projected": round(projected, 2) if have and not prev else None,
+            "complete": prev,
             "import_price": s.import_price, "feed_in_price": s.feed_in_price, "supply_price": s.supply_price,
             "car_kwh": round(car / 1000.0, 2), "car_grid_kwh": round(car_grid_kwh, 2),
             "car_grid_cost": round(car_grid_kwh * s.import_price, 2),
@@ -2710,7 +2716,7 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/days":
             self._json(c.get_days())
         elif u.path == "/api/bill":
-            self._json(c.get_bill())
+            self._json(c.get_bill(prev=parse_qs(u.query).get("prev") == ["1"]))
         else:
             self.send_error(404)
 

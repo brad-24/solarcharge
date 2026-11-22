@@ -298,6 +298,12 @@ dl.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .charthead h2 { margin: 0; }
 .legendrow { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); }
 .legendrow span { display: inline-flex; align-items: center; gap: 6px; }
+/* chart legends double as switches: tap a series to hide or show its line */
+.legendrow.toggles button { font: inherit; font-size: 13px; color: var(--text-2); background: none; border: 1px solid transparent;
+  border-radius: 999px; padding: 2px 8px 2px 6px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.legendrow.toggles button:hover { border-color: var(--border); }
+.legendrow.toggles button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+.legendrow.toggles button[aria-pressed="false"] .swatch { background: transparent !important; outline: 1.5px solid var(--text-3); outline-offset: -1.5px; }
 .range { margin-left: auto; display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; }
 .range button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-2);
   padding: 4px 10px; border-radius: 6px; cursor: pointer; }
@@ -452,6 +458,8 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
 .hero .day7 .lb { display: none; }
 ul.events.tall { max-height: 640px; }
 .bill { margin-bottom: 14px; }
+.billtop { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.billtop h2 { margin: 0; }
 .billgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 @media (max-width: 760px) { .billgrid { grid-template-columns: 1fr; gap: 6px; } }
 .bill .billhead { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
@@ -625,7 +633,13 @@ ul.events.tall { max-height: 640px; }
 
   <div class="tab" id="tab-energy" hidden>
   <section class="card bill">
-    <h2>Upcoming bill</h2>
+    <div class="billtop">
+      <h2 id="b-title">Upcoming bill</h2>
+      <div class="range" id="brange">
+        <button type="button" data-b="0" class="on">This bill</button>
+        <button type="button" data-b="1">Last bill</button>
+      </div>
+    </div>
     <div class="billgrid">
       <div>
         <div class="billhead">
@@ -647,12 +661,12 @@ ul.events.tall { max-height: 640px; }
   <section class="card" style="margin-bottom:14px">
     <div class="charthead">
       <h2>Usage</h2>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
-        <span><span class="swatch" style="background:var(--s-house)"></span>House</span>
-        <span><span class="swatch" style="background:var(--s-car)"></span>Car</span>
-        <span><span class="swatch" style="background:var(--e-grid)"></span>Grid</span>
-        <span><span class="swatch" style="background:var(--e-export)"></span>Export</span>
+      <div class="legendrow toggles" id="ulegend" data-chart="u" aria-label="Show or hide lines">
+        <button type="button" data-s="Solar" aria-pressed="true"><span class="swatch" style="background:var(--s-solar)"></span>Solar</button>
+        <button type="button" data-s="House" aria-pressed="true"><span class="swatch" style="background:var(--s-house)"></span>House</button>
+        <button type="button" data-s="Car" aria-pressed="true"><span class="swatch" style="background:var(--s-car)"></span>Car</button>
+        <button type="button" data-s="Grid" aria-pressed="true"><span class="swatch" style="background:var(--e-grid)"></span>Grid</button>
+        <button type="button" data-s="Export" aria-pressed="true"><span class="swatch" style="background:var(--e-export)"></span>Export</button>
       </div>
       <div class="range" id="range">
         <button type="button" data-min="180">3 h</button>
@@ -670,13 +684,14 @@ ul.events.tall { max-height: 640px; }
   <section class="card" style="margin-bottom:14px">
     <div class="charthead">
       <h2>Meter</h2>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--s-solar)"></span>Solar</span>
-        <span><span class="swatch" style="background:var(--e-export)"></span>Export</span>
-        <span><span class="swatch" style="background:var(--e-grid)"></span>Grid</span>
+      <div class="legendrow toggles" id="elegend" data-chart="e" aria-label="Show or hide lines">
+        <button type="button" data-s="Solar" aria-pressed="true"><span class="swatch" style="background:var(--s-solar)"></span>Solar</button>
+        <button type="button" data-s="Export" aria-pressed="true"><span class="swatch" style="background:var(--e-export)"></span>Export</button>
+        <button type="button" data-s="Grid" aria-pressed="true"><span class="swatch" style="background:var(--e-grid)"></span>Grid</button>
       </div>
       <div class="range" id="erange">
         <button type="button" data-d="bill" class="on">This bill</button>
+        <button type="button" data-d="last">Last bill</button>
         <button type="button" data-d="14">14 d</button>
         <button type="button" data-d="30">30 d</button>
       </div>
@@ -894,7 +909,28 @@ ul.events.tall { max-height: 640px; }
   window.addEventListener("hashchange", function () { showTab(); window.scrollTo(0, 0); });
 
   // ---- daily energy: solar made, exported and taken from the grid, per day
-  var eRange = "bill", daysData = null, lastBill = null;
+  var eRange = "bill", daysData = null, lastBill = null, prevBill = null;
+  // which lines are switched off on each chart, remembered in this browser
+  var hidden = { u: {}, e: {} };
+  try { var hs = JSON.parse(localStorage.getItem("sc_hidden") || "null"); if (hs && hs.u && hs.e) hidden = hs; } catch (e) {}
+  function syncLegends() {
+    ["u", "e"].forEach(function (c) {
+      Array.prototype.forEach.call($(c === "u" ? "ulegend" : "elegend").querySelectorAll("button"), function (b) {
+        b.setAttribute("aria-pressed", hidden[c][b.getAttribute("data-s")] ? "false" : "true");
+      });
+    });
+  }
+  ["ulegend", "elegend"].forEach(function (id) {
+    $(id).addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      var c = $(id).getAttribute("data-chart"), n = b.getAttribute("data-s");
+      if (hidden[c][n]) delete hidden[c][n]; else hidden[c][n] = 1;
+      try { localStorage.setItem("sc_hidden", JSON.stringify(hidden)); } catch (e) {}
+      syncLegends();
+      if (c === "u") drawChart(); else drawEnergy();
+    });
+  });
+  syncLegends();
   var ESER = [
     { key: "pv_wh", name: "Solar", color: "--s-solar" },
     { key: "export_wh", name: "Export", color: "--e-export" },
@@ -902,6 +938,7 @@ ul.events.tall { max-height: 640px; }
   ];
   function isoDay(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function drawEnergy() {
+    var ESV = ESER.filter(function (x) { return !hidden.e[x.name]; });
     var box = $("echart"), tip = $("etip");
     if (!box.clientWidth || !daysData) return;
     var old = box.querySelector("svg"); if (old) old.remove();
@@ -910,6 +947,9 @@ ul.events.tall { max-height: 640px; }
     if (eRange === "bill") {
       if (!lastBill) return;
       start = new Date(lastBill.start + "T12:00:00");
+    } else if (eRange === "last") {
+      if (!prevBill) return;
+      start = new Date(prevBill.start + "T12:00:00"); today = new Date(prevBill.end + "T12:00:00");
     } else start.setDate(today.getDate() - parseInt(eRange, 10) + 1);
     var keys = [];
     for (var d = new Date(start.getTime()); isoDay(d) <= isoDay(today); d.setDate(d.getDate() + 1)) keys.push(isoDay(d));
@@ -920,7 +960,7 @@ ul.events.tall { max-height: 640px; }
     }
     var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 8, mt = 10, mb = 26, iw = W - ml - mr, ih = H - mt - mb;
     var ymax = 0;
-    have.forEach(function (k) { ESER.forEach(function (s) { ymax = Math.max(ymax, (daysData[k][s.key] || 0) / 1000); }); });
+    have.forEach(function (k) { ESV.forEach(function (s) { ymax = Math.max(ymax, (daysData[k][s.key] || 0) / 1000); }); });
     var steps = [1, 2, 5, 10, 20, 25, 50, 100], raw = ymax / 4, st = 100;
     for (var i = 0; i < steps.length; i++) if (steps[i] >= raw) { st = steps[i]; break; }
     ymax = Math.max(st * 4, 4);
@@ -940,7 +980,7 @@ ul.events.tall { max-height: 640px; }
     });
     html += "</g>";
     var xd = function (n) { return ml + gw * (n + 0.5); };
-    ESER.forEach(function (s) {
+    ESV.forEach(function (s) {
       var line = "", area = "", seg = [];
       var flush = function () {
         if (!seg.length) return;
@@ -956,7 +996,7 @@ ul.events.tall { max-height: 640px; }
       html += "<path class='line' d='" + line + "' style='stroke:var(" + s.color + ")'/>";
     });
     html += "<line class='cross' id='ecross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
-    ESER.forEach(function (s, j) { html += "<circle class='dot' id='edot" + j + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
+    ESV.forEach(function (s, j) { html += "<circle class='dot' id='edot" + j + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
     var NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.setAttribute("role", "img");
@@ -969,12 +1009,12 @@ ul.events.tall { max-height: 640px; }
       var n = Math.max(0, Math.min(keys.length - 1, Math.round((cx - ml) / gw - 0.5)));
       var k = keys[n], row = daysData[k], px = xd(n);
       cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      ESER.forEach(function (s, j) {
+      ESV.forEach(function (s, j) {
         var c = svg.querySelector("#edot" + j);
         if (row) { c.setAttribute("cx", px); c.setAttribute("cy", y((row[s.key] || 0) / 1000)); c.style.display = ""; } else c.style.display = "none";
       });
       tip.innerHTML = "<div class='t'>" + new Date(k + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + "</div>" +
-        (row ? ESER.map(function (s) {
+        (row ? ESV.map(function (s) {
           return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + ((row[s.key] || 0) / 1000).toFixed(1) + " kWh</b></div>";
         }).join("")
           : "<div class='muted'>No data</div>");
@@ -984,7 +1024,7 @@ ul.events.tall { max-height: 640px; }
     }
     function hide() {
       tip.style.display = "none"; cross.style.display = "none";
-      ESER.forEach(function (s, j) { svg.querySelector("#edot" + j).style.display = "none"; });
+      ESV.forEach(function (s, j) { svg.querySelector("#edot" + j).style.display = "none"; });
     }
     svg.addEventListener("mousemove", show);
     svg.addEventListener("touchstart", show, { passive: true });
@@ -1006,31 +1046,47 @@ ul.events.tall { max-height: 640px; }
 
   function money(v) { return (v < 0 ? "&minus;$" : "$") + Math.abs(v).toFixed(2); }
   function shortDate(k) { return new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }); }
+  var billView = 0;   // 0 the bill now running, 1 the last one
+  function showBill(b, prev) {
+    $("b-title").textContent = prev ? "Last bill" : "Upcoming bill";
+    setText("b-total", money(b.total) + (prev ? "" : " <small style='font-size:14px;font-weight:500;color:var(--text-2)'>so far</small>"));
+    setText("b-period", shortDate(b.start) + " to " + shortDate(b.end) + (prev ? ", " + b.days_total + " days" : ", day " + b.days_elapsed + " of " + b.days_total));
+    $("b-proj").parentNode.style.visibility = prev ? "hidden" : "";
+    setText("b-proj", b.projected == null ? "&nbsp;" : "about " + money(b.projected));
+    $("b-bar").style.width = Math.min(100, 100 * b.days_elapsed / b.days_total) + "%";
+    var c = function (p) { return p >= 1 ? "$" + p.toFixed(2) : (p * 100).toFixed(p * 100 % 1 ? 2 : 0) + "c"; };
+    var rows = [
+      ["Grid usage<small>" + b.import_kwh.toFixed(1) + " kWh at " + c(b.import_price) + "</small>", money(b.usage)],
+      ["Supply charge<small>" + b.days_elapsed + " days at " + c(b.supply_price) + " a day</small>",
+        b.supply_price ? money(b.supply) : "<span class='muted'>not set</span>"],
+      ["Solar feed in<small>" + b.export_kwh.toFixed(1) + " kWh at " + c(b.feed_in_price) + "</small>", "<span class='cr'>" + money(-b.credit) + "</span>"]
+    ];
+    var html = rows.map(function (r) { return "<tr><td class='k'>" + r[0] + "</td><td>" + r[1] + "</td></tr>"; }).join("") +
+      "<tr class='tot'><td>" + (prev ? "Total" : "Total so far") + "</td><td>" + money(b.total) + "</td></tr>";
+    setText("b-rows", html);
+    var notes = [];
+    if (b.car_grid_kwh > 0.05) notes.push("Car charging from the grid " + (prev ? "that" : "this") + " period: " + b.car_grid_kwh.toFixed(1) + " kWh, " + money(b.car_grid_cost) + ".");
+    if (b.first_data && b.first_data > b.start) notes.push("SolarCharge's records start " + shortDate(b.first_data) + ", so earlier days aren't counted.");
+    if (!b.first_data) notes.push("No readings for this period.");
+    if (!b.supply_price) notes.push("Add your daily supply charge as supply_c_per_day under [tariff] in config.ini.");
+    notes.push("An estimate from the inverter's meter readings, before any discounts or fees on the actual bill.");
+    setText("b-note", notes.join(" "));
+  }
   function pollBill() {
-    fetch("/api/bill", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (b) {
-      lastBill = b; drawEnergy();
-      setText("b-total", money(b.total) + " <small style='font-size:14px;font-weight:500;color:var(--text-2)'>so far</small>");
-      setText("b-period", shortDate(b.start) + " to " + shortDate(b.end) + ", day " + b.days_elapsed + " of " + b.days_total);
-      setText("b-proj", b.projected == null ? "&nbsp;" : "about " + money(b.projected));
-      $("b-bar").style.width = Math.min(100, 100 * b.days_elapsed / b.days_total) + "%";
-      var c = function (p) { return p >= 1 ? "$" + p.toFixed(2) : (p * 100).toFixed(p * 100 % 1 ? 2 : 0) + "c"; };
-      var rows = [
-        ["Grid usage<small>" + b.import_kwh.toFixed(1) + " kWh at " + c(b.import_price) + "</small>", money(b.usage)],
-        ["Supply charge<small>" + b.days_elapsed + " days at " + c(b.supply_price) + " a day</small>",
-          b.supply_price ? money(b.supply) : "<span class='muted'>not set</span>"],
-        ["Solar feed in<small>" + b.export_kwh.toFixed(1) + " kWh at " + c(b.feed_in_price) + "</small>", "<span class='cr'>" + money(-b.credit) + "</span>"]
-      ];
-      var html = rows.map(function (r) { return "<tr><td class='k'>" + r[0] + "</td><td>" + r[1] + "</td></tr>"; }).join("") +
-        "<tr class='tot'><td>Total so far</td><td>" + money(b.total) + "</td></tr>";
-      setText("b-rows", html);
-      var notes = [];
-      if (b.car_grid_kwh > 0.05) notes.push("Car charging from the grid this period: " + b.car_grid_kwh.toFixed(1) + " kWh, " + money(b.car_grid_cost) + ".");
-      if (b.first_data && b.first_data > b.start) notes.push("SolarCharge's records start " + shortDate(b.first_data) + ", so earlier days aren't counted.");
-      if (!b.supply_price) notes.push("Add your daily supply charge as supply_c_per_day under [tariff] in config.ini.");
-      notes.push("An estimate from the inverter's meter readings, before any discounts or fees on the actual bill.");
-      setText("b-note", notes.join(" "));
+    Promise.all([
+      fetch("/api/bill", { cache: "no-store" }).then(function (r) { return r.json(); }),
+      fetch("/api/bill?prev=1", { cache: "no-store" }).then(function (r) { return r.json(); })
+    ]).then(function (res) {
+      lastBill = res[0]; prevBill = res[1]; drawEnergy();
+      showBill(billView ? prevBill : lastBill, billView === 1);
     }).catch(function () {});
   }
+  $("brange").addEventListener("click", function (e) {
+    var bt = e.target.closest("button"); if (!bt) return;
+    billView = +bt.getAttribute("data-b");
+    Array.prototype.forEach.call($("brange").querySelectorAll("button"), function (x) { x.classList.toggle("on", x === bt); });
+    if (lastBill) showBill(billView ? prevBill : lastBill, billView === 1);
+  });
 
   // ---- Car card: battery, time to limit, charge details, and the charge limit slider
   var limitSent = null, limitPrevT = null;   // limitPrevT: the result showing when the change was sent
@@ -1185,6 +1241,7 @@ ul.events.tall { max-height: 640px; }
   }
 
   function drawChart() {
+    var SER = SERIES.filter(function (x) { return !hidden.u[x.name]; });
     var box = $("chart"), tip = $("tip");
     if (!box.clientWidth) return;   // not on this view
     var old = box.querySelector("svg"); if (old) old.remove();
@@ -1205,7 +1262,7 @@ ul.events.tall { max-height: 640px; }
     var W = box.clientWidth, H = box.clientHeight, ml = 46, mr = 44, mt = 10, mb = 26;
     var iw = W - ml - mr, ih = H - mt - mb;
     var ymax = 0;
-    pts.forEach(function (p) { ymax = Math.max(ymax, p[1], p[2], p[3], p[4], p[5]); });
+    pts.forEach(function (p) { SER.forEach(function (x) { ymax = Math.max(ymax, p[x.key]); }); });
     ymax = niceMax(ymax);
     var x = function (t) { return ml + (t - from) / (now - from) * iw; };
     var y = function (v) { return mt + ih - Math.max(0, v) / ymax * ih; };
@@ -1239,7 +1296,7 @@ ul.events.tall { max-height: 640px; }
     for (var g = 1; g < pts.length; g++) diffs.push(pts[g][0] - pts[g - 1][0]);
     diffs.sort(function (a, b) { return a - b; });
     var gapLimit = Math.max(180, 3 * (diffs[Math.floor(diffs.length / 2)] || 60));
-    SERIES.forEach(function (s) {
+    SER.forEach(function (s) {
       var d = "", area = "", seg = [];
       var flush = function () {
         if (seg.length < 1) return;
@@ -1258,7 +1315,7 @@ ul.events.tall { max-height: 640px; }
       html += "<path class='line' d='" + d + "' style='stroke:var(" + s.color + ")'/>";
     });
     // direct labels at the right edge, nudged apart
-    var last = pts[pts.length - 1], labels = SERIES.map(function (s) { return { s: s, y: y(last[s.key]) }; });
+    var last = pts[pts.length - 1], labels = SER.map(function (s) { return { s: s, y: y(last[s.key]) }; });
     labels.sort(function (a, b) { return a.y - b.y; });
     for (var j = 1; j < labels.length; j++) if (labels[j].y - labels[j - 1].y < 13) labels[j].y = labels[j - 1].y + 13;
     // keep the stack inside the chart: if it runs off the bottom, push it back up
@@ -1268,7 +1325,7 @@ ul.events.tall { max-height: 640px; }
       html += "<text class='dlabel' x='" + (W - mr + 6) + "' y='" + (l.y + 4) + "'>" + l.s.name + "</text>";
     });
     html += "<line class='cross' id='cross' y1='" + mt + "' y2='" + (mt + ih) + "' style='display:none'/>";
-    SERIES.forEach(function (s, k) { html += "<circle class='dot' id='dot" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
+    SER.forEach(function (s, k) { html += "<circle class='dot' id='dot" + k + "' r='4' style='fill:var(" + s.color + ");display:none'/>"; });
     html += "<rect id='hit' x='" + ml + "' y='" + mt + "' width='" + iw + "' height='" + ih + "' fill='transparent'/>";
     svg.innerHTML = html;
     box.insertBefore(svg, tip);
@@ -1282,11 +1339,11 @@ ul.events.tall { max-height: 640px; }
       for (var i = 0; i < pts.length; i++) { var dd = Math.abs(pts[i][0] - t); if (dd < bd) { bd = dd; best = i; } }
       var p = pts[best], px = x(p[0]);
       cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.style.display = "";
-      SERIES.forEach(function (s, k) {
+      SER.forEach(function (s, k) {
         var c = svg.querySelector("#dot" + k);
         c.setAttribute("cx", px); c.setAttribute("cy", y(p[s.key])); c.style.display = "";
       });
-      tip.innerHTML = "<div class='t'>" + when(p[0], span > 86400) + (isLong() ? " <span class='muted'>(average)</span>" : "") + "</div>" + SERIES.map(function (s) {
+      tip.innerHTML = "<div class='t'>" + when(p[0], span > 86400) + (isLong() ? " <span class='muted'>(average)</span>" : "") + "</div>" + SER.map(function (s) {
         return "<div class='r'><span class='swatch' style='background:var(" + s.color + ")'></span>" + s.name + "<b>" + kwPlain(p[s.key]) + "</b></div>";
       }).join("");
       tip.style.display = "block";
@@ -1295,7 +1352,7 @@ ul.events.tall { max-height: 640px; }
     }
     function leave() {
       tip.style.display = "none"; cross.style.display = "none";
-      SERIES.forEach(function (s, k) { svg.querySelector("#dot" + k).style.display = "none"; });
+      SER.forEach(function (s, k) { svg.querySelector("#dot" + k).style.display = "none"; });
     }
     hit.addEventListener("mousemove", move);
     hit.addEventListener("touchstart", move, { passive: true });
