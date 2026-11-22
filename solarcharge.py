@@ -2293,12 +2293,20 @@ class Controller(object):
         if chg["plugged"]:
             if dt > 0:
                 h = dt / 3600.0
+                sol = 0.0
                 ss["wh"] += car_w * h
                 if inv is not None:
                     house = max(0.0, inv["load"] - car_w)
-                    ss["solar_wh"] += max(0.0, min(car_w, max(0, inv["pv"]) - house)) * h
+                    sol = max(0.0, min(car_w, max(0, inv["pv"]) - house)) * h
+                    ss["solar_wh"] += sol
                 if car_w > 50:
                     ss["charge_s"] += dt
+                # each day's share, so a session that runs overnight counts on the days it actually charged
+                day = ss.setdefault("days", {}).setdefault(time.strftime("%Y-%m-%d", time.localtime(now)), [0.0, 0.0, 0.0])
+                day[0] += car_w * h
+                day[1] += sol
+                if car_w > 50:
+                    day[2] += dt
             ss["peak_w"] = max(ss["peak_w"], car_w)
             if chg.get("session_wh"):
                 ss["wc_wh"] = max(ss["wc_wh"], float(chg["session_wh"]))
@@ -2343,6 +2351,9 @@ class Controller(object):
             "feed_in_price": fp,
             # energy that reached the battery, from the car, and how much of the delivered energy that was
             "batt_kwh": round(ss["batt_kwh"], 2) if ss.get("batt_kwh") else None,
+            # kWh, solar kWh and charging minutes for each day the session charged, scaled like the totals
+            "days": {k: [round(v[0] * scale / 1000.0, 2), round(min(v[0], v[1]) * scale / 1000.0, 2), int(round(v[2] / 60.0))]
+                     for k, v in sorted((ss.get("days") or {}).items()) if v[0] > 0} or None,
             "eff_pct": int(round(100.0 * ss["batt_kwh"] / kwh)) if ss.get("batt_kwh") and kwh > 0.5 else None,
         }
 

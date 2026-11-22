@@ -269,11 +269,33 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     return [new Date(2000, 0, 1), new Date(2100, 0, 1)];
   }
 
+  // the part of a session that falls in a period. Sessions record each day's charging, so one that
+  // runs overnight counts on the days it charged; older ones without that go by their start time
+  function portion(s, a, b) {
+    if (!s.days) return s.start >= a && s.start < b ? s : null;
+    var k = 0, sk = 0, mins = 0, dates = Object.keys(s.days);
+    dates.forEach(function (day) {
+      var p = day.split("-"), t = new Date(+p[0], +p[1] - 1, +p[2]).getTime() / 1000;
+      if (t >= a && t < b) { k += s.days[day][0]; sk += s.days[day][1]; mins += s.days[day][2]; }
+    });
+    var any = dates.some(function (day) { var p = day.split("-"), t = new Date(+p[0], +p[1] - 1, +p[2]).getTime() / 1000; return t >= a && t < b; });
+    if (!any) return s.live && s.start < b && (s.end || Date.now() / 1000) >= a ? s : null;   // plugged in, not charged yet
+    if (k >= (s.kwh || 0) - 0.01) return s;                                                     // all of it is in this period
+    var c = Object.assign({}, s), ip = s.import_price || 0, fp = s.feed_in_price || 0, f = s.kwh ? k / s.kwh : 0;
+    c.part_of = s.kwh;
+    c.kwh = k; c.solar_kwh = sk; c.grid_kwh = Math.max(0, k - sk);
+    c.solar_pct = k > 0 ? Math.round(100 * sk / k) : 0;
+    c.charge_min = mins;
+    c.cost = c.grid_kwh * ip + sk * fp; c.saved = sk * (ip - fp);
+    if (s.batt_kwh) c.batt_kwh = s.batt_kwh * f;
+    return c;
+  }
   function inPeriod() {
-    var r = range(period), a = r[0].getTime() / 1000, b = r[1].getTime() / 1000;
-    var list = data.sessions.filter(function (s) { return s.start >= a && s.start < b; });
-    if (data.current && data.current.start >= a && data.current.start < b) {
-      var c = Object.assign({}, data.current); c.live = true; list.push(c);
+    var r = range(period), a = r[0].getTime() / 1000, b = r[1].getTime() / 1000, list = [];
+    data.sessions.forEach(function (s) { var p = portion(s, a, b); if (p) list.push(p); });
+    if (data.current) {
+      var c = Object.assign({}, data.current); c.live = true;
+      var p = portion(c, a, b); if (p) list.push(p);
     }
     return list.sort(function (x, y) { return y.start - x.start; });
   }
@@ -446,6 +468,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
         html += "<tr" + (s.live ? " class='live'" : "") + "><td>" + date + (s.live ? "<span class='pill'>Plugged in</span>" : "") + where +
           "</td><td class='hide-sm'>" + span + "</td><td class='hide-sm'>" + dur(s.charge_min) + "</td><td>" + kwh(s.kwh) +
+          (s.part_of ? " <span class='muted' title='Only the charging in this period is counted here'>of " + kwh(s.part_of) + "</span>" : "") +
           "</td><td><span class='share'><span class='bar' title='" + s.solar_pct + "% solar'" + (s.supercharger ? " style='background:var(--sc)'" : "") + "><i style='width:" + s.solar_pct + "%'></i></span>" + s.solar_pct + "%</span>" +
           "</td><td class='hide-sm'>" + kwh(s.grid_kwh) + "</td><td class='hide-sm'>" + (s.peak_kw ? s.peak_kw.toFixed(1) : "<span class='muted'>n/a</span>") +
           "</td><td class='hide-sm'>" + (s.batt_kwh ? kwh(s.batt_kwh) + (s.eff_pct ? " <span class='muted'>(" + s.eff_pct + "%)</span>" : "") : "<span class='muted'>n/a</span>") +
@@ -480,6 +503,16 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
       }
     }
     list.forEach(function (s) {
+      if (s.days) {   // spread across the days it charged
+        var counted = {};
+        Object.keys(s.days).forEach(function (day) {
+          var k = byMonth ? day.slice(0, 7) : day, i = idx[k];
+          if (i === undefined) return;
+          buckets[i].s += s.days[day][1]; buckets[i].g += Math.max(0, s.days[day][0] - s.days[day][1]);
+          if (!counted[k]) { buckets[i].n += 1; counted[k] = 1; }
+        });
+        return;
+      }
       var k = byMonth ? monthKey(s.start) : dayKey(s.start), i = idx[k];
       if (i === undefined) return;
       if (s.supercharger) buckets[i].c += s.kwh || 0;
