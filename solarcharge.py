@@ -2273,15 +2273,21 @@ class Controller(object):
             # The Wall Connector knows how long the car has been plugged in and how much
             # it has delivered, so a session already underway is picked up from its true start.
             # Energy delivered before tracking began is counted as grid, since its source is unknown.
-            start = now
+            start, age = now, 0.0
             try:
                 age = float(chg.get("session_s") or 0)
                 if 0 < age < 30 * 86400:
                     start = now - age
+                else:
+                    age = 0.0
             except (TypeError, ValueError):
-                pass
+                age = 0.0
+            # Just after plugging in, the Wall Connector can still report the previous session's energy for a
+            # moment. Only take its figure if it could have been delivered in the time it says it's been plugged in
+            wc0 = float(chg.get("session_wh") or 0)
+            stale = wc0 > 7700.0 * age / 3600.0 + 100
             self.session = {"start": start, "wh": 0.0, "solar_wh": 0.0, "charge_s": 0.0,
-                            "peak_w": car_w, "wc_wh": float(chg.get("session_wh") or 0), "starts": 0,
+                            "peak_w": car_w, "wc_wh": 0.0 if stale else wc0, "wc_last": wc0, "starts": 0,
                             "stops": 0, "commands": 0, "modes": [self.mode]}
             if start < now - 60:
                 self.event("Picked up a session already in progress since %s (%.1f kWh so far)"
@@ -2308,8 +2314,12 @@ class Controller(object):
                 if car_w > 50:
                     day[2] += dt
             ss["peak_w"] = max(ss["peak_w"], car_w)
-            if chg.get("session_wh"):
-                ss["wc_wh"] = max(ss["wc_wh"], float(chg["session_wh"]))
+            if chg.get("session_wh") is not None:
+                # add what the Wall Connector's session counter has gone up by; if it drops, it has restarted
+                # from zero (or a stale figure has cleared), so count from there
+                v, last = float(chg["session_wh"]), ss.get("wc_last", ss["wc_wh"])
+                ss["wc_wh"] += v - last if v >= last else v
+                ss["wc_last"] = v
             if self.mode not in ss["modes"]:
                 ss["modes"].append(self.mode)
             return
@@ -2326,6 +2336,9 @@ class Controller(object):
     def _session_view(self, ss, now, final=False):
         measured = ss["wh"]
         wh = ss["wc_wh"] if ss["wc_wh"] > 0 else measured
+        # a sanity check: no more than full power for the whole time plugged in
+        if wh > 7700.0 * max(60.0, now - ss["start"]) / 3600.0 + 100 and measured > 0:
+            wh = measured
         scale = (wh / measured) if measured > 0 else 1.0
         solar = min(wh, ss["solar_wh"] * scale)
         grid = max(0.0, wh - solar)
