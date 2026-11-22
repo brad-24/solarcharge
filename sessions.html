@@ -269,10 +269,12 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     return [new Date(2000, 0, 1), new Date(2100, 0, 1)];
   }
 
+  // when a session is dated: the day it was unplugged (or now, while still plugged in)
+  function when(s) { return s.end || (s.live ? Date.now() / 1000 : s.start); }
   // the part of a session that falls in a period. Sessions record each day's charging, so one that
-  // runs overnight counts on the days it charged; older ones without that go by their start time
+  // runs overnight counts on the days it charged; older ones without that go by the day they were unplugged
   function portion(s, a, b) {
-    if (!s.days) return s.start >= a && s.start < b ? s : null;
+    if (!s.days) return when(s) >= a && when(s) < b ? s : null;
     var k = 0, sk = 0, mins = 0, dates = Object.keys(s.days);
     dates.forEach(function (day) {
       var p = day.split("-"), t = new Date(+p[0], +p[1] - 1, +p[2]).getTime() / 1000;
@@ -297,7 +299,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
       var c = Object.assign({}, data.current); c.live = true;
       var p = portion(c, a, b); if (p) list.push(p);
     }
-    return list.sort(function (x, y) { return y.start - x.start; });
+    return list.sort(function (x, y) { return when(y) - when(x); });
   }
 
   function sum(list, k) { return list.reduce(function (t, s) { return t + (s[k] || 0); }, 0); }
@@ -460,9 +462,10 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
 
   function rowHtml(s) {
         var html = "";
-        var date = d(s.start).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+        var date = d(when(s)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
         var dd = function (t) { return d(t).toLocaleDateString([], { day: "numeric", month: "short" }); };
         var span = s.estimated ? (dd(s.start) === dd(s.end) ? dd(s.start) + ", time unknown" : dd(s.start) + " to " + dd(s.end)) :
+          (dayKey(s.start) !== dayKey(when(s)) ? d(s.start).toLocaleDateString([], { weekday: "short" }) + " " : "") +
           hm(s.start) + " to " + (s.live ? "now" : hm(s.end));
         var where = s.estimated ? "<span class='pill est' title='" + esc(s.note || "Estimated") + "'>Estimated</span>" : !s.away ? "" : s.supercharger ? "<span class='pill sc'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">Supercharger</span>" :
           "<span class='pill away'" + (s.place ? " title='" + esc(s.place) + "'" : "") + ">" + (s.kind === "dc" ? "Fast charger" : "Public AC") + "</span>";
@@ -513,7 +516,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
         });
         return;
       }
-      var k = byMonth ? monthKey(s.start) : dayKey(s.start), i = idx[k];
+      var k = byMonth ? monthKey(when(s)) : dayKey(when(s)), i = idx[k];
       if (i === undefined) return;
       if (s.supercharger) buckets[i].c += s.kwh || 0;
       else { buckets[i].s += s.solar_kwh || 0; buckets[i].g += s.grid_kwh || 0; }
@@ -601,7 +604,8 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     var cols = ["start", "end", "kwh", "solar_kwh", "grid_kwh", "solar_pct", "charge_min", "plugged_min", "peak_kw", "batt_kwh", "eff_pct", "cost", "saved", "starts", "stops", "commands", "where"];
     var lines = [["date", "plugged_in", "unplugged"].concat(cols.slice(2)).join(",")];
     inPeriod().slice().reverse().forEach(function (s) {
-      var row = [dayKey(s.start), hm(s.start), s.live ? "" : hm(s.end)];
+      // dated by the day it was unplugged; plugged in shows its own date when that was the day before
+      var row = [dayKey(when(s)), (dayKey(s.start) !== dayKey(when(s)) ? dayKey(s.start) + " " : "") + hm(s.start), s.live ? "" : hm(s.end)];
       cols.slice(2).forEach(function (c) {
         var v = c === "where" ? (s.away ? (s.supercharger ? "Supercharger" : s.kind === "dc" ? "away fast charger" : "away public AC") +
           (s.place ? " (" + String(s.place).replace(/[,"]/g, " ") + ")" : "") : "home") : s[c];
