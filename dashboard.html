@@ -656,7 +656,7 @@ ul.events.tall { max-height: 640px; }
   <div class="tab" id="tab-energy" hidden>
   <section class="card bill">
     <div class="billtop">
-      <h2 id="b-title">Upcoming bill</h2>
+      <h2 id="b-title">Bill estimate</h2>
       <div class="range" id="brange">
         <button type="button" data-b="0" class="on">This bill</button>
         <button type="button" data-b="1">Last bill</button>
@@ -1082,7 +1082,7 @@ ul.events.tall { max-height: 640px; }
   function shortDate(k) { return new Date(k + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }); }
   var billView = 0;   // 0 the bill now running, 1 the last one
   function showBill(b, prev) {
-    $("b-title").textContent = prev ? "Last bill" : "Upcoming bill";
+    $("b-title").textContent = prev ? "Last bill estimate" : "Bill estimate";
     setText("b-total", money(b.total) + (prev ? "" : " <small style='font-size:14px;font-weight:500;color:var(--text-2)'>so far</small>"));
     setText("b-period", shortDate(b.start) + " to " + shortDate(b.end) + (prev ? ", " + b.days_total + " days" : ", day " + b.days_elapsed + " of " + b.days_total));
     $("b-proj").parentNode.style.visibility = prev ? "hidden" : "";
@@ -1096,7 +1096,7 @@ ul.events.tall { max-height: 640px; }
       ["Solar feed in<small>" + b.export_kwh.toFixed(1) + " kWh at " + c(b.feed_in_price) + "</small>", "<span class='cr'>" + money(-b.credit) + "</span>"]
     ];
     var html = rows.map(function (r) { return "<tr><td class='k'>" + r[0] + "</td><td>" + r[1] + "</td></tr>"; }).join("") +
-      "<tr class='tot'><td>" + (prev ? "Total" : "Total so far") + "</td><td>" + money(b.total) + "</td></tr>";
+      "<tr class='tot'><td>" + (prev ? "Estimated total" : "Estimated so far") + "</td><td>" + money(b.total) + "</td></tr>";
     setText("b-rows", html);
     var notes = [];
     if (b.car_grid_kwh > 0.05) notes.push("Car charging from the grid " + (prev ? "that" : "this") + " period: " + b.car_grid_kwh.toFixed(1) + " kWh, " + money(b.car_grid_cost) + ".");
