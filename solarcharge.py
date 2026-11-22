@@ -2193,8 +2193,13 @@ class Controller(object):
             item["home"] = d.weekday() in home_days
             item["due"] = due is not None and d.toordinal() == due
             days.append(item)
-        # pick the sunniest home day on or before the due date (or the first week if overdue/unknown)
-        limit = due if (due is not None and due >= today.toordinal()) else today.toordinal() + 7
+        soc = v.get("soc")
+        need = round((100 - soc) / 100.0 * self.s.battery_kwh / 0.9, 1) if soc is not None else None
+        # Pick the sunniest home day on or before the due date. Once it's due (or overdue), there's no point
+        # waiting for a sunnier day: take the first home day in the coming week with enough solar for the
+        # charge plus the house, and only fall back to the sunniest if none has enough.
+        overdue = due is None or due <= today.toordinal() + 1
+        limit = today.toordinal() + 6 if overdue else due
         cands = [x for x in days if x["home"] and x.get("solar_kwh") is not None and
                  datetime.strptime(x["date"], "%Y-%m-%d").date().toordinal() <= limit]
         late = False
@@ -2202,11 +2207,14 @@ class Controller(object):
             # no home day before it's due: suggest the sunniest home day after instead
             cands = [x for x in days if x["home"] and x.get("solar_kwh") is not None]
             late = bool(cands) and due is not None
-        best = max(cands, key=lambda x: x["solar_kwh"])["date"] if cands else None
+        enough = None
+        if overdue and cands:
+            want = max((need or 30) * 1.6, (need or 30) + 15)   # the charge plus a typical day's house use
+            ok = [x for x in cands if x["solar_kwh"] >= want]
+            enough = ok[0]["date"] if ok else None
+        best = enough or (max(cands, key=lambda x: x["solar_kwh"])["date"] if cands else None)
         for x in days:
             x["best"] = x["date"] == best
-        soc = v.get("soc")
-        need = round((100 - soc) / 100.0 * self.s.battery_kwh / 0.9, 1) if soc is not None else None
         return {
             "every_days": self.s.full_every,
             "last_full": last,
@@ -2218,6 +2226,7 @@ class Controller(object):
             "forecast_error": self.forecast.error if self.forecast else "off",
             "best": best,
             "best_late": late,
+            "best_first_good": enough is not None,
             "home_learned": learned,
             "today": today.strftime("%Y-%m-%d"),
         }
