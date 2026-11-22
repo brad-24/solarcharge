@@ -122,7 +122,28 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 .pill.live { color: var(--good); border-color: currentColor; }
 .pill.sim { color: var(--accent); border-color: currentColor; }
 .pill.stale { color: var(--crit); border-color: currentColor; }
-.clock { margin-left: auto; color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.clock { color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+/* the next reading: a ring that fills over the 10 seconds between reads */
+.readind { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-3); }
+.readind svg { width: 16px; height: 16px; transform: rotate(-90deg); }
+.readind circle { fill: none; stroke-width: 2.6; }
+.readind .bg { stroke: var(--border); }
+.readind .fg { stroke: var(--accent); stroke-dasharray: 100; stroke-dashoffset: 100; stroke-linecap: round; }
+.readind .fg.run { animation: readfill 10s linear forwards; }
+.readind.err .fg { stroke: var(--crit); stroke-dashoffset: 0; animation: none; }
+.readind.err { color: var(--crit); }
+@keyframes readfill { to { stroke-dashoffset: 0; } }
+@media (max-width: 760px) { .readind .t { display: none; } }
+/* phones: keep the header on one line, letting the status pill shorten if it must */
+@media (max-width: 600px) {
+  header { flex-wrap: nowrap; }
+  header h1 { flex: none; }
+  header h1 .t { display: none !important; }   /* the icon is enough here; the status needs the room */
+  #runpill { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .readind { flex: none; gap: 0; }
+  .clock { flex: none; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .readind .fg.run { animation: none; stroke-dashoffset: 0; } }
 .theme { background: none; border: 1px solid var(--border); color: var(--text-2); border-radius: 8px;
   font: inherit; font-size: 13px; padding: 3px 9px; cursor: pointer; }
 
@@ -484,6 +505,7 @@ ul.events.tall { max-height: 640px; }
     <h1><img src="/img/icon-180.png" alt="SolarCharge"><span class="t">SolarCharge</span></h1>
     <nav class="nav" id="nav"><a href="#control" data-tab="control" class="on">Control</a><a href="#energy" data-tab="energy">Energy</a><a href="/sessions" id="nav-car">Sessions</a><a href="#system" data-tab="system">System</a></nav>
     <span id="runpill" class="pill">Connecting</span>
+    <span class="readind" id="readind" title="Reads the inverter, charger and car every 10 seconds"><svg viewBox="0 0 20 20" aria-hidden="true"><circle class="bg" cx="10" cy="10" r="7"/><circle class="fg" id="readring" cx="10" cy="10" r="7" pathLength="100"/></svg><span class="t" id="readtxt">Reading&hellip;</span></span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
   </header>
@@ -882,8 +904,20 @@ ul.events.tall { max-height: 640px; }
 
   function poll() {
     fetch("/api/status", { cache: "no-store" }).then(function (r) { return r.json(); })
-      .then(function (s) { if (s && s.time) { render(s); if (s.car_name) $("nav-car").textContent = s.car_name; } })
-      .catch(function () { var p = $("runpill"); p.className = "pill stale"; p.textContent = "Cannot reach the Pi"; });
+      .then(function (s) {
+        if (s && s.time) { render(s); if (s.car_name) $("nav-car").textContent = s.car_name; }
+        $("readind").classList.remove("err"); $("readtxt").textContent = "Reading\u2026";
+      })
+      .catch(function () {
+        var p = $("runpill"); p.className = "pill stale"; p.textContent = "Cannot reach the Pi";
+        $("readind").classList.add("err"); $("readtxt").textContent = "No reply";
+      });
+  }
+  // every 10 seconds: read, and start the ring filling again towards the next read
+  function tick() {
+    var r = $("readring");
+    r.classList.remove("run"); void r.getBoundingClientRect(); r.classList.add("run");
+    poll();
   }
   function pollHistory() {
     fetch("/api/history?minutes=4320", { cache: "no-store" }).then(function (r) { return r.json(); })
@@ -1504,7 +1538,8 @@ ul.events.tall { max-height: 640px; }
   setInterval(pollBill, 300000);
   setInterval(pollWeather, 600000);
   setInterval(pollSchedule, 120000);
-  setInterval(poll, 10000);
+  setInterval(tick, 10000);
+  (function () { var r = $("readring"); r.classList.add("run"); })();
   setInterval(tickClock, 1000);
   setInterval(pollHistory, 60000);
   setInterval(pollDays, 300000);
