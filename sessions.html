@@ -61,6 +61,10 @@ nav a.on { background: var(--surface); color: var(--text); box-shadow: var(--sha
 .tile .value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .tile .value small { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 2px; }
 .tile .sub { font-size: 12px; color: var(--text-3); }
+/* the fuel price slider under the fuel comparison tile */
+.fuelslide { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-3); }
+.fuelslide input { flex: 1; min-width: 0; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.fuelslide b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 .charthead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
 .legendrow { display: flex; gap: 14px; font-size: 13px; color: var(--text-2); }
 .legendrow span { display: inline-flex; align-items: center; gap: 6px; }
@@ -184,7 +188,8 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     <div class="card tile"><div class="label">Driven</div><div class="value" id="t-km">&nbsp;</div><div class="sub" id="t-kmsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Efficiency</div><div class="value" id="t-eff">&nbsp;</div><div class="sub" id="t-effsub">&nbsp;</div></div>
     <div class="card tile"><div class="label">Effective cost</div><div class="value" id="t-ecost">&nbsp;</div><div class="sub" id="t-ecostsub">&nbsp;</div></div>
-    <div class="card tile"><div class="label" id="t-fuellbl">Same km in fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div></div>
+    <div class="card tile"><div class="label" id="t-fuellbl">Same km in fuel</div><div class="value" id="t-fuel">&nbsp;</div><div class="sub" id="t-fuelsub">&nbsp;</div>
+      <label class="fuelslide"><span id="t-fuelpl">Price</span><input type="range" id="t-fuelprice" min="1.50" max="3.00" step="0.01" aria-label="Fuel price per litre"><b id="t-fuelpv"></b></label></div>
   </section>
 
   <section class="card" style="margin-bottom:14px">
@@ -343,10 +348,20 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
     var frac = span > 0 ? Math.min(1, (dayNum(key) - dayNum(dv.date)) / span) : 1;
     return [dv.odo + (dist.days[first] - dv.odo) * frac, true];
   }
+  var fuelArgs = [0, 0];
   function renderFuel(cost, total) {
+    // called again by the fuel slider with no arguments: reuse the period's figures
+    if (arguments.length) fuelArgs = [cost, total]; else { cost = fuelArgs[0]; total = fuelArgs[1]; }
     tripRate = null;
     var dist = data.distance, f = data.fuel || {};
     $("t-fuellbl").textContent = "Same km in " + (f.name || "fuel");
+    // the slider shows the price in use; while it's being dragged, the tile follows it
+    var sl = $("t-fuelprice");
+    if (f.price) {
+      if (fuelDraft === null) sl.value = f.price.toFixed(2);
+      $("t-fuelpv").textContent = "$" + (fuelDraft !== null ? fuelDraft : f.price).toFixed(2);
+    }
+    $("t-fuelpl").textContent = (f.name ? f.name.charAt(0).toUpperCase() + f.name.slice(1) : "Fuel") + " $/L";
     var na = function (why) {
       $("t-km").innerHTML = "<span class='muted'>n/a</span>"; $("t-kmsub").textContent = why;
       $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;";
@@ -402,6 +417,7 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
         (rateAll ? " (all time average)" : "") + ", " + (100 * dcost / km).toFixed(1) + "c per km";
     } else { $("t-ecost").innerHTML = na2; $("t-ecostsub").textContent = "needs trips and charging"; }
     if (km < 1 || !f.l_per_100km || !f.price) { $("t-fuel").innerHTML = "<span class='muted'>n/a</span>"; $("t-fuelsub").innerHTML = "&nbsp;"; return; }
+    if (fuelDraft !== null) f = Object.assign({}, f, { price: fuelDraft });
     var fuel = km * f.l_per_100km / 100 * f.price;
     // what the same distance would have cost in fuel, with the saving underneath
     $("t-fuel").innerHTML = money(fuel);
@@ -409,6 +425,16 @@ header.stuck { box-shadow: 0 0 0 100vmax var(--bg), 0 1px 0 100vmax var(--border
       money(Math.max(0, fuel - cost)).replace(/<[^>]*>/g, "") + " saved";
   }
 
+  // fuel price slider: the tile updates as it moves, and the price is saved on the Pi when let go
+  var fuelDraft = null;
+  $("t-fuelprice").addEventListener("input", function () { fuelDraft = +this.value; renderFuel(); });
+  $("t-fuelprice").addEventListener("change", function () {
+    var p = +this.value;
+    fetch("/api/fuel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ price: p }) })
+      .then(function (r) { if (r.ok && data && data.fuel) data.fuel.price = p; })
+      .catch(function () {})
+      .then(function () { fuelDraft = null; renderFuel(); });
+  });
   var tripRate = null;   // average price per kWh for the period, set by renderFuel, used for each trip's cost
   function trips() {
     var dist = data && data.distance;

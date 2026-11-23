@@ -1444,6 +1444,8 @@ class Controller(object):
         self.mode = st.get("mode") if st.get("mode") in MODES else s.default_mode
         self.history = deque(st.get("history", []), maxlen=s.history_minutes)
         self.days = st.get("days", {})
+        # the fuel price set with the slider on the car tab; until then, fuel_c_per_l from config.ini
+        self.fuel_price = st.get("fuel_price") if isinstance(st.get("fuel_price"), (int, float)) else None
         self.today_key = st.get("today_key", "")
         self.today = st.get("today") or self._blank_today()
         self.events = deque(maxlen=40)
@@ -1501,6 +1503,15 @@ class Controller(object):
         self.archived_through = st.get("archived_through")   # last day written to the archive
 
     # ---- public, called from web thread
+
+    def set_fuel_price(self, dollars):
+        """The fuel price for the car tab's comparison, in dollars a litre, kept across restarts."""
+        p = float(dollars)
+        if not 0.5 <= p <= 5.0:
+            return False
+        self.fuel_price = round(p, 2)
+        self._save(self.clock())
+        return True
 
     def set_limit(self, percent):
         """Charge limit change from the dashboard; sent from the control loop, like every car command."""
@@ -2446,7 +2457,7 @@ class Controller(object):
                          "place": place})
         done.sort(key=lambda x: x["start"])
         return {"sessions": done, "current": cur, "distance": self.get_distance(), "car_name": self.s.car_name,
-                "fuel": {"l_per_100km": self.s.fuel_l100, "price": self.s.fuel_price, "name": self.s.fuel_name},
+                "fuel": {"l_per_100km": self.s.fuel_l100, "price": self.fuel_price or self.s.fuel_price, "name": self.s.fuel_name},
                 "import_price": self.s.import_price, "feed_in_price": self.s.feed_in_price}
 
     def _account(self, now, dt, inv, car_w):
@@ -2559,6 +2570,7 @@ class Controller(object):
             "last_full": self.last_full,
             "vehicle": self.vehicle,
             "archived_through": self.archived_through,
+            "fuel_price": self.fuel_price,
             "saved": now,
             **self.legacy,
         })
@@ -2734,6 +2746,15 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/fullcharge":
             self.controller.mark_full()
             self._json({"ok": True})
+            return
+        if u.path == "/api/fuel":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(min(n, 4096)).decode("utf-8") or "{}")
+                ok = self.controller.set_fuel_price(data.get("price"))
+            except (ValueError, TypeError):
+                ok = False
+            self._json({"ok": ok} if ok else {"ok": False, "error": "price must be $0.50 to $5.00 a litre"}, 200 if ok else 400)
             return
         if u.path == "/api/limit":
             try:
